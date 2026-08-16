@@ -1,1 +1,16 @@
+name: svt_app
+description: SVT Car Rental and Taxi Billing App
+publish_to: "none"
+version: 1.0.0+1
 
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  url_launcher: ^6.3.2
+  shared_preferences: ^2.5.3
+
+flutter:
+  uses-material-design: true

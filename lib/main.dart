@@ -1,673 +1,366 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
-void main() => runApp(const SVTApp());
+const reviewUrl = 'https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6';
+final notifications = FlutterLocalNotificationsPlugin();
 
-class SVTApp extends StatelessWidget {
-  const SVTApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SVT Tours and Transport',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
-      ),
-      home: const BillingPage(),
-    );
-  }
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  tz.initializeTimeZones();
+  const init = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+  await notifications.initialize(init);
+  await notifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+  runApp(const SVTApp());
 }
 
 class Booking {
-  final String id;
-  final DateTime date;
-  final String customer;
-  final String phone;
-  final String vehicle;
-  final String pickup;
-  final String drop;
-  final double km;
-  final double kmRate;
-  final double toll;
-  final double parking;
-  final double total;
+  final String id, guest, phone, vehicleType, vehicleNumber, driver, tripDetails, billingMode;
+  final DateTime startDate, endDate;
+  final double startingKm, closingKm, toll, parking, total;
+  final bool preBooking;
 
   const Booking({
-    required this.id,
-    required this.date,
-    required this.customer,
-    required this.phone,
-    required this.vehicle,
-    required this.pickup,
-    required this.drop,
-    required this.km,
-    required this.kmRate,
-    required this.toll,
-    required this.parking,
-    required this.total,
+    required this.id, required this.guest, required this.phone,
+    required this.vehicleType, required this.vehicleNumber, required this.driver,
+    required this.tripDetails, required this.startDate, required this.endDate,
+    required this.startingKm, required this.closingKm, required this.toll,
+    required this.parking, required this.billingMode, required this.total,
+    required this.preBooking,
   });
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'customer': customer,
-        'phone': phone,
-        'vehicle': vehicle,
-        'pickup': pickup,
-        'drop': drop,
-        'km': km,
-        'kmRate': kmRate,
-        'toll': toll,
-        'parking': parking,
-        'total': total,
-      };
+  double get totalKm => (closingKm - startingKm).clamp(0, double.infinity);
+  int get days => endDate.difference(startDate).inDays + 1;
 
-  factory Booking.fromJson(Map<String, dynamic> json) => Booking(
-        id: json['id'] as String,
-        date: DateTime.parse(json['date'] as String),
-        customer: json['customer'] as String? ?? '',
-        phone: json['phone'] as String? ?? '',
-        vehicle: json['vehicle'] as String? ?? '',
-        pickup: json['pickup'] as String? ?? '',
-        drop: json['drop'] as String? ?? '',
-        km: (json['km'] as num?)?.toDouble() ?? 0,
-        kmRate: (json['kmRate'] as num?)?.toDouble() ?? 0,
-        toll: (json['toll'] as num?)?.toDouble() ?? 0,
-        parking: (json['parking'] as num?)?.toDouble() ?? 0,
-        total: (json['total'] as num?)?.toDouble() ?? 0,
-      );
+  Map<String,dynamic> toJson() => {
+    'id':id,'guest':guest,'phone':phone,'vehicleType':vehicleType,
+    'vehicleNumber':vehicleNumber,'driver':driver,'tripDetails':tripDetails,
+    'startDate':startDate.toIso8601String(),'endDate':endDate.toIso8601String(),
+    'startingKm':startingKm,'closingKm':closingKm,'toll':toll,'parking':parking,
+    'billingMode':billingMode,'total':total,'preBooking':preBooking,
+  };
+
+  factory Booking.fromJson(Map<String,dynamic> j) => Booking(
+    id:j['id'], guest:j['guest']??'', phone:j['phone']??'',
+    vehicleType:j['vehicleType']??'Sedan', vehicleNumber:j['vehicleNumber']??'',
+    driver:j['driver']??'', tripDetails:j['tripDetails']??'',
+    startDate:DateTime.parse(j['startDate']), endDate:DateTime.parse(j['endDate']),
+    startingKm:(j['startingKm'] as num?)?.toDouble()??0,
+    closingKm:(j['closingKm'] as num?)?.toDouble()??0,
+    toll:(j['toll'] as num?)?.toDouble()??0,
+    parking:(j['parking'] as num?)?.toDouble()??0,
+    billingMode:j['billingMode']??'KM Based',
+    total:(j['total'] as num?)?.toDouble()??0,
+    preBooking:j['preBooking']??false,
+  );
+}
+
+class SVTApp extends StatelessWidget {
+  const SVTApp({super.key});
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title:'SVT Tours and Transport', debugShowCheckedModeBanner:false,
+    theme:ThemeData(colorScheme:ColorScheme.fromSeed(seedColor:Colors.green),useMaterial3:true),
+    home:const BillingPage(),
+  );
 }
 
 class BillingPage extends StatefulWidget {
   const BillingPage({super.key});
-
-  @override
-  State<BillingPage> createState() => _BillingPageState();
+  @override State<BillingPage> createState()=>_BillingPageState();
 }
 
 class _BillingPageState extends State<BillingPage> {
-  final _formKey = GlobalKey<FormState>();
-  final _customerController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _pickupController = TextEditingController();
-  final _dropController = TextEditingController();
-  final _kmController = TextEditingController();
-  final _tollController = TextEditingController();
-  final _parkingController = TextEditingController();
-  final _sedanRateController = TextEditingController();
-  final _suvRateController = TextEditingController();
+  final keyForm=GlobalKey<FormState>();
+  final guest=TextEditingController(), phone=TextEditingController(),
+      vehicleNo=TextEditingController(), driver=TextEditingController(),
+      details=TextEditingController(), startKm=TextEditingController(),
+      closeKm=TextEditingController(), toll=TextEditingController(),
+      parking=TextEditingController();
 
-  String _selectedCarType = 'Sedan';
-  DateTime _selectedDate = DateTime.now();
-  double _total = 0;
-  List<Booking> _bookings = [];
-  bool _loading = true;
+  String vehicle='Sedan', mode='KM Based';
+  DateTime startDate=DateTime.now(), endDate=DateTime.now();
+  bool preBooking=false, loading=true;
+  double total=0,totalKm=0,sedanRate=20,suvRate=22,sedanDay=3500,suvDay=4500,
+      includedKm=100,extraKmRate=20;
+  int days=1;
+  List<Booking> bookings=[];
 
-  double get _rate => _selectedCarType == 'Sedan'
-      ? (double.tryParse(_sedanRateController.text) ?? 0)
-      : (double.tryParse(_suvRateController.text) ?? 0);
+  double get kmRate=>vehicle=='Sedan'?sedanRate:suvRate;
+  double get dayRate=>vehicle=='Sedan'?sedanDay:suvDay;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
+  @override void initState(){super.initState();load();}
+  @override void dispose(){
+    for(final c in [guest,phone,vehicleNo,driver,details,startKm,closeKm,toll,parking]) c.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString('bookings');
-    final sedan = prefs.getDouble('sedan_rate') ?? 20;
-    final suv = prefs.getDouble('suv_rate') ?? 22;
-    final list = <Booking>[];
-
-    if (saved != null && saved.isNotEmpty) {
-      final raw = jsonDecode(saved) as List<dynamic>;
-      for (final item in raw) {
-        list.add(Booking.fromJson(Map<String, dynamic>.from(item)));
-      }
+  Future<void> load() async {
+    final p=await SharedPreferences.getInstance();
+    final raw=p.getString('bookings');
+    if(raw!=null){
+      final list=jsonDecode(raw) as List;
+      bookings=list.map((e)=>Booking.fromJson(Map<String,dynamic>.from(e))).toList();
     }
-
-    if (!mounted) return;
-    setState(() {
-      _sedanRateController.text = sedan.toString();
-      _suvRateController.text = suv.toString();
-      _bookings = list;
-      _loading = false;
-    });
-    _calculate();
+    sedanRate=p.getDouble('sedanRate')??20; suvRate=p.getDouble('suvRate')??22;
+    sedanDay=p.getDouble('sedanDay')??3500; suvDay=p.getDouble('suvDay')??4500;
+    includedKm=p.getDouble('includedKm')??100; extraKmRate=p.getDouble('extraKmRate')??20;
+    setState(()=>loading=false); calc();
   }
 
-  Future<void> _saveData() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(
-      'sedan_rate',
-      double.tryParse(_sedanRateController.text) ?? 20,
-    );
-    await prefs.setDouble(
-      'suv_rate',
-      double.tryParse(_suvRateController.text) ?? 22,
-    );
-    await prefs.setString(
-      'bookings',
-      jsonEncode(_bookings.map((e) => e.toJson()).toList()),
-    );
+  Future<void> save() async {
+    final p=await SharedPreferences.getInstance();
+    await p.setString('bookings',jsonEncode(bookings.map((e)=>e.toJson()).toList()));
+    await p.setDouble('sedanRate',sedanRate); await p.setDouble('suvRate',suvRate);
+    await p.setDouble('sedanDay',sedanDay); await p.setDouble('suvDay',suvDay);
+    await p.setDouble('includedKm',includedKm); await p.setDouble('extraKmRate',extraKmRate);
   }
 
-  void _calculate() {
-    final km = double.tryParse(_kmController.text.trim()) ?? 0;
-    final toll = double.tryParse(_tollController.text.trim()) ?? 0;
-    final parking = double.tryParse(_parkingController.text.trim()) ?? 0;
-    setState(() => _total = km * _rate + toll + parking);
-  }
-
-  String _date(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
-  }
-
-  Future<void> _saveBooking() async {
-    if (!_formKey.currentState!.validate()) return;
-    _calculate();
-
-    final booking = Booking(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      date: _selectedDate,
-      customer: _customerController.text.trim(),
-      phone: _phoneController.text.trim(),
-      vehicle: _selectedCarType,
-      pickup: _pickupController.text.trim(),
-      drop: _dropController.text.trim(),
-      km: double.tryParse(_kmController.text.trim()) ?? 0,
-      kmRate: _rate,
-      toll: double.tryParse(_tollController.text.trim()) ?? 0,
-      parking: double.tryParse(_parkingController.text.trim()) ?? 0,
-      total: _total,
-    );
-
-    setState(() => _bookings = [booking, ..._bookings]);
-    await _saveData();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking / Bill saved successfully.')),
-      );
+  void calc(){
+    final s=double.tryParse(startKm.text)??0,c=double.tryParse(closeKm.text)??0;
+    final t=double.tryParse(toll.text)??0,p=double.tryParse(parking.text)??0;
+    totalKm=(c-s).clamp(0,double.infinity); days=endDate.difference(startDate).inDays+1;
+    if(mode=='KM Based') total=totalKm*kmRate+t+p;
+    else {
+      final extra=totalKm>includedKm?totalKm-includedKm:0;
+      total=dayRate*days+extra*extraKmRate+t+p;
     }
+    setState((){});
   }
 
-  String _billText() {
-    final km = double.tryParse(_kmController.text.trim()) ?? 0;
-    final toll = double.tryParse(_tollController.text.trim()) ?? 0;
-    final parking = double.tryParse(_parkingController.text.trim()) ?? 0;
-    final extras = <String>[];
-    if (toll > 0) extras.add('Toll: ₹${toll.toStringAsFixed(2)}');
-    if (parking > 0) extras.add('Parking: ₹${parking.toStringAsFixed(2)}');
+  String fmt(DateTime d)=>'${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year}';
 
-    return '''
+  Future<void> pickStart() async {
+    final d=await showDatePicker(context:context,initialDate:startDate,firstDate:DateTime(2020),lastDate:DateTime(2100));
+    if(d!=null){setState((){startDate=d;if(endDate.isBefore(d))endDate=d;});calc();}
+  }
+  Future<void> pickEnd() async {
+    final d=await showDatePicker(context:context,initialDate:endDate,firstDate:DateTime(2020),lastDate:DateTime(2100));
+    if(d!=null){if(d.isBefore(startDate)){msg('Closing date cannot be before starting date.');return;}setState(()=>endDate=d);calc();}
+  }
+  void msg(String s)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));
+
+  Future<void> saveBooking() async {
+    if(!keyForm.currentState!.validate())return; calc();
+    final b=Booking(
+      id:DateTime.now().microsecondsSinceEpoch.toString(),guest:guest.text.trim(),
+      phone:phone.text.trim(),vehicleType:vehicle,vehicleNumber:vehicleNo.text.trim(),
+      driver:driver.text.trim(),tripDetails:details.text.trim(),startDate:startDate,
+      endDate:endDate,startingKm:double.tryParse(startKm.text)??0,
+      closingKm:double.tryParse(closeKm.text)??0,toll:double.tryParse(toll.text)??0,
+      parking:double.tryParse(parking.text)??0,billingMode:mode,total:total,preBooking:preBooking,
+    );
+    bookings=[b,...bookings]; await save();
+    if(preBooking) await reminder(b);
+    msg('Booking saved successfully.');
+  }
+
+  Future<void> reminder(Booking b) async {
+    final r=DateTime(b.startDate.year,b.startDate.month,b.startDate.day,9).subtract(const Duration(days:1));
+    if(r.isBefore(DateTime.now()))return;
+    await notifications.zonedSchedule(
+      b.id.hashCode,'SVT Vehicle Booking Reminder',
+      '${b.guest} • Vehicle required ${fmt(b.startDate)}',
+      tz.TZDateTime.from(r,tz.local),
+      const NotificationDetails(
+        android:AndroidNotificationDetails('svt_booking','SVT Booking Reminders',
+          channelDescription:'Upcoming vehicle booking reminders',
+          importance:Importance.high,priority:Priority.high),
+      ),
+      androidScheduleMode:AndroidScheduleMode.inexactAllowWhileIdle,
+      payload:b.id,
+    );
+  }
+
+  String bill(Booking b)=>'''
 *SVT TOURS AND TRANSPORT*
 
-Date: ${_date(_selectedDate)}
-Customer: ${_customerController.text}
-Phone: ${_phoneController.text}
-Vehicle: $_selectedCarType
-Pickup: ${_pickupController.text}
-Drop: ${_dropController.text}
-Distance: ${km.toStringAsFixed(1)} km
-${extras.isEmpty ? '' : '${extras.join('\n')}\n'}
-*Total Amount: ₹${_total.toStringAsFixed(2)}*
+Guest: ${b.guest}
+Phone: ${b.phone}
+Vehicle: ${b.vehicleType}
+Vehicle No: ${b.vehicleNumber}
+${b.driver.isEmpty?'':'Driver: ${b.driver}\n'}Starting Date: ${fmt(b.startDate)}
+Closing Date: ${fmt(b.endDate)}
+Duration: ${b.days} Days
+Starting KM: ${b.startingKm.toStringAsFixed(1)}
+Closing KM: ${b.closingKm.toStringAsFixed(1)}
+Total KM: ${b.totalKm.toStringAsFixed(1)}
+${b.tripDetails.isEmpty?'':'Details of Trip: ${b.tripDetails}\n'}
+${b.toll>0?'Toll: ₹${b.toll.toStringAsFixed(2)}\n':''}${b.parking>0?'Parking: ₹${b.parking.toStringAsFixed(2)}\n':''}
+*Total Amount: ₹${b.total.toStringAsFixed(2)}*
 
 Thank you for choosing SVT Tours and Transport.
 We appreciate your valuable support.
 
-⭐ Please review us on Google:
-https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6
+⭐ Google Review:
+$reviewUrl
 ''';
+
+  Future<Uint8List> pdfBytes(Booking b) async {
+    final doc=pw.Document();
+    doc.addPage(pw.Page(
+      pageFormat:PdfPageFormat.a4,margin:const pw.EdgeInsets.all(32),
+      build:(_)=>pw.Column(crossAxisAlignment:pw.CrossAxisAlignment.start,children:[
+        pw.Center(child:pw.Text('SVT TOURS AND TRANSPORT',style:pw.TextStyle(fontSize:22,fontWeight:pw.FontWeight.bold))),
+        pw.SizedBox(height:20),
+        pw.Text('Guest: ${b.guest}'),pw.Text('Phone: ${b.phone}'),
+        pw.Text('Vehicle: ${b.vehicleType}'),pw.Text('Vehicle No: ${b.vehicleNumber}'),
+        if(b.driver.isNotEmpty)pw.Text('Driver: ${b.driver}'),
+        pw.SizedBox(height:10),pw.Text('Starting Date: ${fmt(b.startDate)}'),
+        pw.Text('Closing Date: ${fmt(b.endDate)}'),pw.Text('Duration: ${b.days} Days'),
+        pw.SizedBox(height:10),pw.Text('Starting KM: ${b.startingKm.toStringAsFixed(1)}'),
+        pw.Text('Closing KM: ${b.closingKm.toStringAsFixed(1)}'),
+        pw.Text('Total KM: ${b.totalKm.toStringAsFixed(1)}'),
+        if(b.tripDetails.isNotEmpty)pw.Padding(padding:const pw.EdgeInsets.only(top:10),child:pw.Text('Details of Trip: ${b.tripDetails}')),
+        pw.SizedBox(height:14),if(b.toll>0)pw.Text('Toll: ₹${b.toll.toStringAsFixed(2)}'),
+        if(b.parking>0)pw.Text('Parking: ₹${b.parking.toStringAsFixed(2)}'),pw.Divider(),
+        pw.Align(alignment:pw.Alignment.centerRight,child:pw.Text('TOTAL: ₹${b.total.toStringAsFixed(2)}',style:pw.TextStyle(fontSize:18,fontWeight:pw.FontWeight.bold))),
+        pw.Spacer(),pw.Center(child:pw.Text('Thank you for choosing SVT Tours and Transport.')),
+        pw.SizedBox(height:5),pw.Center(child:pw.Text('Google Review: $reviewUrl',style:const pw.TextStyle(fontSize:8))),
+      ]),
+    ));
+    return doc.save();
   }
 
-  Future<void> _whatsapp() async {
-    if (!_formKey.currentState!.validate()) return;
-    _calculate();
-    final phone = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    final uri = Uri.parse(
-      'https://wa.me/$phone?text=${Uri.encodeComponent(_billText())}',
-    );
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WhatsApp തുറക്കാൻ കഴിഞ്ഞില്ല.')),
-      );
-    }
+  Future<void> sharePdf(Booking b) async {
+    await Printing.sharePdf(bytes:await pdfBytes(b),filename:'SVT_${b.guest}_${fmt(b.startDate).replaceAll('/','-')}.pdf');
   }
 
-  Future<void> _review() async {
-    final uri = Uri.parse('https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Review page തുറക്കാൻ കഴിഞ്ഞില്ല.')),
-      );
-    }
+  Future<void> whatsapp(Booking b) async {
+    final n=b.phone.replaceAll(RegExp(r'[^0-9]'),'');
+    if(n.length<10)return;
+    await launchUrl(Uri.parse('https://wa.me/$n?text=${Uri.encodeComponent(bill(b))}'),mode:LaunchMode.externalApplication);
   }
 
-  Future<void> _rates() async {
-    final sedan = TextEditingController(text: _sedanRateController.text);
-    final suv = TextEditingController(text: _suvRateController.text);
+  Future<void> review() async=>launchUrl(Uri.parse(reviewUrl),mode:LaunchMode.externalApplication);
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('KM Rate Settings'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: sedan,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Sedan Rate / KM',
-                prefixText: '₹ ',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: suv,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'SUV Rate / KM',
-                prefixText: '₹ ',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final a = double.tryParse(sedan.text);
-              final b = double.tryParse(suv.text);
-              if (a == null || b == null || a < 0 || b < 0) return;
-              _sedanRateController.text = a.toString();
-              _suvRateController.text = b.toString();
-              Navigator.pop(context, true);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-
-    sedan.dispose();
-    suv.dispose();
-
-    if (ok == true) {
-      await _saveData();
-      _calculate();
-    }
+  Future<void> settings() async {
+    final a=TextEditingController(text:'$sedanRate'),b=TextEditingController(text:'$suvRate'),
+      c=TextEditingController(text:'$sedanDay'),d=TextEditingController(text:'$suvDay'),
+      e=TextEditingController(text:'$includedKm'),f=TextEditingController(text:'$extraKmRate');
+    final ok=await showDialog<bool>(context:context,builder:(_)=>AlertDialog(
+      title:const Text('Internal Pricing Settings'),
+      content:SingleChildScrollView(child:Column(children:[
+        TextField(controller:a,decoration:const InputDecoration(labelText:'Sedan KM Rate')),
+        TextField(controller:b,decoration:const InputDecoration(labelText:'SUV KM Rate')),
+        TextField(controller:c,decoration:const InputDecoration(labelText:'Sedan Full Day Amount')),
+        TextField(controller:d,decoration:const InputDecoration(labelText:'SUV Full Day Amount')),
+        TextField(controller:e,decoration:const InputDecoration(labelText:'Included KM')),
+        TextField(controller:f,decoration:const InputDecoration(labelText:'Extra KM Rate')),
+      ])),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('Cancel')),
+        FilledButton(onPressed:(){sedanRate=double.tryParse(a.text)??sedanRate;suvRate=double.tryParse(b.text)??suvRate;sedanDay=double.tryParse(c.text)??sedanDay;suvDay=double.tryParse(d.text)??suvDay;includedKm=double.tryParse(e.text)??includedKm;extraKmRate=double.tryParse(f.text)??extraKmRate;Navigator.pop(context,true);},child:const Text('Save')),
+      ],
+    ));
+    for(final x in [a,b,c,d,e,f])x.dispose();
+    if(ok==true){await save();calc();}
   }
 
-  Future<void> _history() async {
-    DateTime? from;
-    DateTime? to;
-    List<Booking> filtered = List.of(_bookings);
-
-    await showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          void filter() {
-            filtered = _bookings.where((b) {
-              final d = DateTime(b.date.year, b.date.month, b.date.day);
-              final f = from == null ||
-                  !d.isBefore(DateTime(from!.year, from!.month, from!.day));
-              final t = to == null ||
-                  !d.isAfter(DateTime(to!.year, to!.month, to!.day));
-              return f && t;
-            }).toList();
-            setDialogState(() {});
-          }
-
-          Future<void> chooseFrom() async {
-            final d = await showDatePicker(
-              context: context,
-              initialDate: from ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2100),
-            );
-            if (d != null) {
-              from = d;
-              filter();
-            }
-          }
-
-          Future<void> chooseTo() async {
-            final d = await showDatePicker(
-              context: context,
-              initialDate: to ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2100),
-            );
-            if (d != null) {
-              to = d;
-              filter();
-            }
-          }
-
-          return AlertDialog(
-            title: const Text('Customer / Booking History'),
-            content: SizedBox(
-              width: double.maxFinite,
-              height: 430,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: chooseFrom,
-                          child: Text(from == null ? 'From date' : _date(from!)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: chooseTo,
-                          child: Text(to == null ? 'To date' : _date(to!)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      from = null;
-                      to = null;
-                      filter();
-                    },
-                    child: const Text('Clear filter'),
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? const Center(child: Text('No bookings found.'))
-                        : ListView.builder(
-                            itemCount: filtered.length,
-                            itemBuilder: (_, i) {
-                              final b = filtered[i];
-                              return ListTile(
-                                title: Text(b.customer),
-                                subtitle: Text(
-                                  '${_date(b.date)} • ${b.vehicle} • ${b.km.toStringAsFixed(1)} km',
-                                ),
-                                trailing: Text(
-                                  '₹${b.total.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+  Future<void> history() async {
+    DateTime? from,to; List<Booking> list=List.of(bookings);
+    await showDialog(context:context,builder:(_)=>StatefulBuilder(builder:(context,setD){
+      void filter(){list=bookings.where((b){
+        final x=DateTime(b.startDate.year,b.startDate.month,b.startDate.day);
+        return (from==null||!x.isBefore(DateTime(from!.year,from!.month,from!.day)))&&(to==null||!x.isAfter(DateTime(to!.year,to!.month,to!.day)));
+      }).toList();setD((){});}
+      return AlertDialog(title:const Text('Booking / Guest History'),content:SizedBox(width:double.maxFinite,height:450,child:Column(children:[
+        Row(children:[
+          Expanded(child:OutlinedButton(onPressed:()async{final x=await showDatePicker(context:context,initialDate:from??DateTime.now(),firstDate:DateTime(2020),lastDate:DateTime(2100));if(x!=null){from=x;filter();}},child:Text(from==null?'From':fmt(from!)))),
+          const SizedBox(width:8),
+          Expanded(child:OutlinedButton(onPressed:()async{final x=await showDatePicker(context:context,initialDate:to??DateTime.now(),firstDate:DateTime(2020),lastDate:DateTime(2100));if(x!=null){to=x;filter();}},child:Text(to==null?'To':fmt(to!)))),
+        ]),
+        TextButton(onPressed:(){from=null;to=null;filter();},child:const Text('Clear filter')),
+        const Divider(),Expanded(child:list.isEmpty?const Center(child:Text('No bookings found.')):ListView.builder(
+          itemCount:list.length,itemBuilder:(_,i){final b=list[i];return ListTile(
+            title:Text(b.guest),subtitle:Text('${fmt(b.startDate)} • ${b.vehicleType} • ${b.totalKm.toStringAsFixed(1)} KM'),
+            trailing:Text('₹${b.total.toStringAsFixed(0)}',style:const TextStyle(fontWeight:FontWeight.bold)),
+            onTap:()=>showModalBottomSheet(context:context,builder:(_)=>SafeArea(child:Wrap(children:[
+              ListTile(leading:const Icon(Icons.picture_as_pdf),title:const Text('PDF / Share'),onTap:(){Navigator.pop(context);sharePdf(b);}),
+              ListTile(leading:const Icon(Icons.chat),title:const Text('WhatsApp Text Bill'),onTap:(){Navigator.pop(context);whatsapp(b);}),
+            ]))),
+          );},
+        )),
+      ])),actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Close'))]);
+    }));
   }
 
-  void _clear() {
-    _customerController.clear();
-    _phoneController.clear();
-    _pickupController.clear();
-    _dropController.clear();
-    _kmController.clear();
-    _tollController.clear();
-    _parkingController.clear();
-    setState(() {
-      _selectedDate = DateTime.now();
-      _selectedCarType = 'Sedan';
-      _total = 0;
-    });
-  }
+  void clearForm(){for(final c in [guest,phone,vehicleNo,driver,details,startKm,closeKm,toll,parking])c.clear();setState((){startDate=DateTime.now();endDate=startDate;vehicle='Sedan';mode='KM Based';preBooking=false;total=0;totalKm=0;days=1;});}
 
-  @override
-  void dispose() {
-    _customerController.dispose();
-    _phoneController.dispose();
-    _pickupController.dispose();
-    _dropController.dispose();
-    _kmController.dispose();
-    _tollController.dispose();
-    _parkingController.dispose();
-    _sedanRateController.dispose();
-    _suvRateController.dispose();
-    super.dispose();
-  }
+  InputDecoration dec(String s)=>InputDecoration(labelText:s,border:const OutlineInputBorder());
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
+  @override Widget build(BuildContext context){
+    if(loading)return const Scaffold(body:Center(child:CircularProgressIndicator()));
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('SVT Tours and Transport'),
-        centerTitle: true,
-        actions: [
-          IconButton(onPressed: _rates, icon: const Icon(Icons.settings)),
-          IconButton(onPressed: _history, icon: const Icon(Icons.history)),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              const Icon(Icons.directions_car, size: 64),
-              const SizedBox(height: 8),
-              const Text(
-                'Car Rental / Taxi Billing',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: _pickDate,
-                icon: const Icon(Icons.calendar_month),
-                label: Text('Date: ${_date(_selectedDate)}'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _customerController,
-                decoration: const InputDecoration(
-                  labelText: 'കസ്റ്റമറുടെ പേര്',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'പേര് നൽകുക' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'WhatsApp നമ്പർ',
-                  hintText: '91XXXXXXXXXX',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().length < 10 ? 'ശരിയായ നമ്പർ നൽകുക' : null,
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _selectedCarType,
-                decoration: const InputDecoration(
-                  labelText: 'കാറിന്റെ തരം',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'Sedan', child: Text('Sedan')),
-                  DropdownMenuItem(value: 'SUV', child: Text('SUV')),
-                ],
-                onChanged: (v) {
-                  if (v != null) {
-                    setState(() => _selectedCarType = v);
-                    _calculate();
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _pickupController,
-                decoration: const InputDecoration(
-                  labelText: 'Pickup സ്ഥലം',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Pickup നൽകുക' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _dropController,
-                decoration: const InputDecoration(
-                  labelText: 'Drop സ്ഥലം',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Drop നൽകുക' : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _kmController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'ആകെ കിലോമീറ്റർ',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => _calculate(),
-                validator: (v) {
-                  final km = double.tryParse(v?.trim() ?? '');
-                  return km == null || km <= 0 ? 'കിലോമീറ്റർ നൽകുക' : null;
-                },
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _tollController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Toll Amount (Optional)',
-                  prefixText: '₹ ',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => _calculate(),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _parkingController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Parking Amount (Optional)',
-                  prefixText: '₹ ',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (_) => _calculate(),
-              ),
-              const SizedBox(height: 18),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'ആകെ ബിൽ',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '₹${_total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _saveBooking,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save Booking / Bill'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _whatsapp,
-                  icon: const Icon(Icons.chat, color: Colors.white),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  label: const Text(
-                    'വാട്‌സാപ്പ് വഴി ബിൽ അയക്കുക',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _review,
-                  icon: const Icon(Icons.star),
-                  label: const Text('Review us on Google'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextButton.icon(
-                onPressed: _history,
-                icon: const Icon(Icons.history),
-                label: const Text('Customer / Booking History'),
-              ),
-              TextButton(
-                onPressed: _clear,
-                child: const Text('Clear Form'),
-              ),
-            ],
-          ),
-        ),
-      ),
+      appBar:AppBar(title:const Text('SVT Tours and Transport'),actions:[
+        IconButton(onPressed:settings,icon:const Icon(Icons.settings)),
+        IconButton(onPressed:history,icon:const Icon(Icons.history)),
+      ]),
+      body:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Form(key:keyForm,child:Column(children:[
+        const Icon(Icons.directions_car,size:64),
+        const Text('Car Rental & Taxi Billing',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
+        const SizedBox(height:16),
+        SwitchListTile(title:const Text('Pre-Booking'),subtitle:const Text('Reminder one day before vehicle requirement'),value:preBooking,onChanged:(v)=>setState(()=>preBooking=v)),
+        DropdownButtonFormField<String>(value:mode,decoration:dec('Billing Type'),items:const[
+          DropdownMenuItem(value:'KM Based',child:Text('KM Based')),DropdownMenuItem(value:'Full Day',child:Text('Full Day'))],
+          onChanged:(v){if(v!=null){setState(()=>mode=v);calc();}}),
+        const SizedBox(height:10),
+        DropdownButtonFormField<String>(value:vehicle,decoration:dec('Vehicle Type'),items:const[
+          DropdownMenuItem(value:'Sedan',child:Text('Sedan')),DropdownMenuItem(value:'SUV',child:Text('SUV'))],
+          onChanged:(v){if(v!=null){setState(()=>vehicle=v);calc();}}),
+        const SizedBox(height:10),
+        TextFormField(controller:vehicleNo,decoration:dec('Vehicle Number'),validator:(v)=>v==null||v.trim().isEmpty?'Vehicle number നൽകുക':null),
+        const SizedBox(height:10),
+        TextFormField(controller:guest,decoration:dec('Guest'),validator:(v)=>v==null||v.trim().isEmpty?'Guest name നൽകുക':null),
+        const SizedBox(height:10),
+        TextFormField(controller:phone,keyboardType:TextInputType.phone,decoration:dec('Guest WhatsApp Number'),validator:(v)=>v==null||v.trim().length<10?'WhatsApp number നൽകുക':null),
+        const SizedBox(height:10),
+        TextFormField(controller:driver,decoration:dec('Driver Name (Optional)')),
+        const SizedBox(height:10),
+        TextFormField(controller:details,maxLines:2,decoration:dec('Details of Trip (Optional)')),
+        const SizedBox(height:10),
+        Row(children:[
+          Expanded(child:OutlinedButton(onPressed:pickStart,child:Text('Starting Date\n${fmt(startDate)}'))),
+          const SizedBox(width:8),Expanded(child:OutlinedButton(onPressed:pickEnd,child:Text('Closing Date\n${fmt(endDate)}'))),
+        ]),
+        Card(child:ListTile(title:const Text('Duration'),trailing:Text('$days Days'))),
+        TextFormField(controller:startKm,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:dec('Starting KM'),onChanged:(_)=>calc(),validator:(v)=>double.tryParse(v??'')==null?'Starting KM നൽകുക':null),
+        const SizedBox(height:10),
+        TextFormField(controller:closeKm,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:dec('Closing KM'),onChanged:(_)=>calc(),validator:(v){final c=double.tryParse(v??''),s=double.tryParse(startKm.text)??0;return c==null||c<s?'Closing KM ശരിയാക്കുക':null;}),
+        Card(child:ListTile(title:const Text('Total KM'),trailing:Text(totalKm.toStringAsFixed(1),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)))),
+        TextFormField(controller:toll,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:dec('Toll Amount (Optional)'),onChanged:(_)=>calc()),
+        const SizedBox(height:10),
+        TextFormField(controller:parking,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:dec('Parking Amount (Optional)'),onChanged:(_)=>calc()),
+        const SizedBox(height:16),
+        Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[
+          const Text('TOTAL AMOUNT',style:TextStyle(fontWeight:FontWeight.bold)),Text('₹${total.toStringAsFixed(2)}',style:const TextStyle(fontSize:28,fontWeight:FontWeight.bold))
+        ]))),
+        const SizedBox(height:10),
+        SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:saveBooking,icon:const Icon(Icons.save),label:const Text('Save Booking / Bill'))),
+        const SizedBox(height:8),
+        SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()async{
+          if(!keyForm.currentState!.validate())return;calc();
+          final b=Booking(id:DateTime.now().microsecondsSinceEpoch.toString(),guest:guest.text.trim(),phone:phone.text.trim(),vehicleType:vehicle,vehicleNumber:vehicleNo.text.trim(),driver:driver.text.trim(),tripDetails:details.text.trim(),startDate:startDate,endDate:endDate,startingKm:double.tryParse(startKm.text)??0,closingKm:double.tryParse(closeKm.text)??0,toll:double.tryParse(toll.text)??0,parking:double.tryParse(parking.text)??0,billingMode:mode,total:total,preBooking:preBooking);
+          await sharePdf(b);
+        },icon:const Icon(Icons.picture_as_pdf),label:const Text('PDF → WhatsApp / Share'))),
+        const SizedBox(height:8),
+        SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:review,icon:const Icon(Icons.star),label:const Text('Review us on Google'))),
+        TextButton.icon(onPressed:history,icon:const Icon(Icons.history),label:const Text('Booking / Guest History')),
+        TextButton(onPressed:clearForm,child:const Text('Clear Form')),
+      ])),
     );
   }
 }

@@ -1,124 +1,22 @@
-name: Build SVT Android APK
+name: svt_app
+description: SVT Car Rental and Taxi Billing App
+publish_to: "none"
+version: 1.0.0+3
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+environment:
+  sdk: ">=3.0.0 <4.0.0"
 
-jobs:
-  build-apk:
-    runs-on: ubuntu-latest
+dependencies:
+  flutter:
+    sdk: flutter
+  url_launcher: ^6.3.2
+  shared_preferences: ^2.5.3
+  pdf: ^3.11.3
+  share_plus: ^11.0.0
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  flutter_local_notifications: ^19.4.1
+  timezone: ^0.10.1
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.35.7'
-          channel: stable
-          cache: true
-
-      - name: Create Android platform files
-        run: flutter create --platforms=android .
-
-      - name: Configure core library desugaring
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("android/app/build.gradle")
-          s = p.read_text()
-
-          if "coreLibraryDesugaringEnabled true" not in s:
-              s = s.replace(
-                  "compileOptions {",
-                  """compileOptions {
-                  coreLibraryDesugaringEnabled true""",
-                  1
-              )
-
-          if "desugar_jdk_libs" not in s:
-              marker = "flutter {"
-              s = s.replace(
-                  marker,
-                  """dependencies {
-                  coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
-              }
-
-              flutter {""",
-                  1
-              )
-
-          p.write_text(s)
-          PY
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Clean Flutter build
-        run: flutter clean
-
-      - name: Build release APK
-        run: flutter build apk --release
-
-      - name: Locate Android Build Tools
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls -la "$ANDROID_HOME/build-tools" | tail -5
-
-      - name: Align APK
-        run: |
-          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS/zipalign"
-
-          "$ZIPALIGN" -f -p 4 \
-            build/app/outputs/flutter-apk/app-release.apk \
-            build/app/outputs/flutter-apk/app-release-aligned.apk
-
-      - name: Create temporary release keystore
-        run: |
-          keytool -genkeypair \
-            -v \
-            -keystore "$RUNNER_TEMP/svt-release.jks" \
-            -storepass "svtpassword" \
-            -keypass "svtpassword" \
-            -alias "svt" \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=SVT Tours and Transport, OU=SVT, O=SVT, L=Kerala, ST=Kerala, C=IN"
-
-      - name: Sign APK
-        run: |
-          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
-
-          "$APKSIGNER" sign \
-            --ks "$RUNNER_TEMP/svt-release.jks" \
-            --ks-pass pass:svtpassword \
-            --key-pass pass:svtpassword \
-            --out build/app/outputs/flutter-apk/app-release-signed.apk \
-            build/app/outputs/flutter-apk/app-release-aligned.apk
-
-      - name: Verify APK signature
-        run: |
-          BUILD_TOOLS=$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
-
-          "$APKSIGNER" verify --verbose --print-certs \
-            build/app/outputs/flutter-apk/app-release-signed.apk
-
-      - name: Upload verified APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SVT-App-release-SIGNED
-          path: build/app/outputs/flutter-apk/app-release-signed.apk
+flutter:
+  uses-material-design: true

@@ -408,8 +408,12 @@ class _BillPageState extends State<BillPage> {
       return totalKm * widget.kmRate + n(toll) + n(parking);
     }
     final base = vehicleType == 'SUV' ? widget.suvRate : widget.sedanRate;
-    final extra = (totalKm - widget.includedKm * days).clamp(0, double.infinity);
-    return base * days + extra * widget.extraKmRate + n(toll) + n(parking);
+    final extra =
+        (totalKm - widget.includedKm * days).clamp(0, double.infinity);
+    return base * days +
+        extra * widget.extraKmRate +
+        n(toll) +
+        n(parking);
   }
 
   String date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
@@ -475,15 +479,18 @@ class _BillPageState extends State<BillPage> {
         build: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('SVT TOURS & TRANSPORT',
-                style:
-                    pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+            pw.Text(
+              'SVT TOURS & TRANSPORT',
+              style:
+                  pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+            ),
             pw.Text('TRIP BILL'),
             pw.Divider(),
             row('Bill Date', date(DateTime.now())),
             row('Guest', b.guest),
             row('Phone', b.phone),
             row('Vehicle Number', b.vehicle),
+            row('Vehicle Category', b.vehicleType),
             if (b.driver.isNotEmpty) row('Driver', b.driver),
             row('Starting Date', date(b.startDate)),
             row('Closing Date', date(b.closeDate)),
@@ -491,12 +498,6 @@ class _BillPageState extends State<BillPage> {
             row('Starting KM', b.startKm.toStringAsFixed(0)),
             row('Closing KM', b.closeKm.toStringAsFixed(0)),
             row('Total KM', b.totalKm.toStringAsFixed(0)),
-            row(
-              'Trip Type',
-              b.billingType == 'Full Day'
-                  ? 'Full Day (${b.vehicleType})'
-                  : 'KM Based',
-            ),
             if (b.details.isNotEmpty) row('Trip Details', b.details),
             if (b.toll > 0) row('Toll', 'Rs ${b.toll.toStringAsFixed(2)}'),
             if (b.parking > 0)
@@ -513,12 +514,25 @@ class _BillPageState extends State<BillPage> {
             ),
             pw.Spacer(),
             pw.Center(
-                child:
-                    pw.Text('Thank you for choosing SVT Tours & Transport!')),
+              child: pw.Column(
+                children: [
+                  pw.Text(
+                    'Thank you for choosing SVT Tours & Transport!',
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Review us on Google:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(googleReviewUrl),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
+
     return doc.save();
   }
 
@@ -539,15 +553,20 @@ Trip Bill
 
 Guest: ${b.guest}
 Vehicle: ${b.vehicle}
+Vehicle Category: ${b.vehicleType}
 Starting Date: ${date(b.startDate)}
 Closing Date: ${date(b.closeDate)}
 Total Days: ${b.days}
 Total KM: ${b.totalKm.toStringAsFixed(0)}
-Total Amount: Rs ${b.total.toStringAsFixed(2)}
+${b.toll > 0 ? 'Toll: Rs ${b.toll.toStringAsFixed(2)}\n' : ''}${b.parking > 0 ? 'Parking: Rs ${b.parking.toStringAsFixed(2)}\n' : ''}Total Amount: Rs ${b.total.toStringAsFixed(2)}
 
-Thank you for choosing SVT Tours & Transport!''';
+Thank you for choosing SVT Tours & Transport!
+
+⭐ Review us on Google:
+$googleReviewUrl''';
 
     final number = b.phone.replaceAll(RegExp(r'[^0-9]'), '');
+
     await launchUrl(
       Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(text)}'),
       mode: LaunchMode.externalApplication,
@@ -576,8 +595,10 @@ Thank you for choosing SVT Tours & Transport!''';
     ]) {
       c.clear();
     }
+
     toll.text = '0';
     parking.text = '0';
+
     setState(() {
       startDate = DateTime.now();
       closeDate = DateTime.now();
@@ -586,8 +607,12 @@ Thank you for choosing SVT Tours & Transport!''';
     });
   }
 
-  Widget field(String label, TextEditingController c,
-      {bool required = false, TextInputType type = TextInputType.text}) {
+  Widget field(
+    String label,
+    TextEditingController c, {
+    bool required = false,
+    TextInputType type = TextInputType.text,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextFormField(
@@ -609,34 +634,66 @@ Thank you for choosing SVT Tours & Transport!''';
           padding: const EdgeInsets.all(16),
           children: [
             field('Guest Name', guest, required: true),
-            field('Guest Phone', phone,
-                required: true, type: TextInputType.phone),
+            field(
+              'Guest Phone',
+              phone,
+              required: true,
+              type: TextInputType.phone,
+            ),
             field('Vehicle Number', vehicle, required: true),
+
+            // Internal billing option
             DropdownButtonFormField<String>(
               value: billing,
               decoration: const InputDecoration(labelText: 'Billing Type'),
               items: const [
-                DropdownMenuItem(value: 'KM Based', child: Text('KM Based')),
-                DropdownMenuItem(value: 'Full Day', child: Text('Full Day')),
+                DropdownMenuItem(
+                  value: 'KM Based',
+                  child: Text('KM Based'),
+                ),
+                DropdownMenuItem(
+                  value: 'Full Day',
+                  child: Text('Full Day'),
+                ),
               ],
               onChanged: (v) => setState(() => billing = v!),
             ),
-            if (billing == 'Full Day') ...[
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: vehicleType,
-                decoration: const InputDecoration(labelText: 'Vehicle Type'),
-                items: const [
-                  DropdownMenuItem(value: 'Sedan', child: Text('Sedan')),
-                  DropdownMenuItem(value: 'SUV', child: Text('SUV')),
-                ],
-                onChanged: (v) => setState(() => vehicleType = v!),
-              ),
-            ],
+
             const SizedBox(height: 10),
-            field('Starting KM', startKm, type: TextInputType.number),
-            field('Closing KM', closeKm, type: TextInputType.number),
+
+            // Vehicle category is always selectable
+            DropdownButtonFormField<String>(
+              value: vehicleType,
+              decoration:
+                  const InputDecoration(labelText: 'Vehicle Category'),
+              items: const [
+                DropdownMenuItem(
+                  value: 'Sedan',
+                  child: Text('Sedan'),
+                ),
+                DropdownMenuItem(
+                  value: 'SUV',
+                  child: Text('SUV'),
+                ),
+              ],
+              onChanged: (v) => setState(() => vehicleType = v!),
+            ),
+
+            const SizedBox(height: 10),
+
+            field(
+              'Starting KM',
+              startKm,
+              type: TextInputType.number,
+            ),
+            field(
+              'Closing KM',
+              closeKm,
+              type: TextInputType.number,
+            ),
+
             Text('Total KM: ${totalKm.toStringAsFixed(0)}'),
+
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Starting Date: ${date(startDate)}'),
@@ -649,14 +706,26 @@ Thank you for choosing SVT Tours & Transport!''';
               trailing: const Icon(Icons.calendar_today),
               onTap: () => chooseDate(false),
             ),
+
             Text('Total Days: $days'),
+
             const SizedBox(height: 10),
+
             field('Driver Name (Optional)', driver),
             field('Details of Trip (Optional)', details),
-            field('Toll Amount (Optional)', toll,
-                type: TextInputType.number),
-            field('Parking Amount (Optional)', parking,
-                type: TextInputType.number),
+
+            field(
+              'Toll Amount (Optional)',
+              toll,
+              type: TextInputType.number,
+            ),
+
+            field(
+              'Parking Amount (Optional)',
+              parking,
+              type: TextInputType.number,
+            ),
+
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -666,12 +735,15 @@ Thank you for choosing SVT Tours & Transport!''';
                 ),
               ),
             ),
+
             const SizedBox(height: 8),
+
             FilledButton.icon(
               onPressed: saveBooking,
               icon: const Icon(Icons.save),
               label: const Text('Save Booking'),
             ),
+
             OutlinedButton.icon(
               onPressed: () async {
                 if (!form.currentState!.validate()) return;
@@ -680,6 +752,7 @@ Thank you for choosing SVT Tours & Transport!''';
               icon: const Icon(Icons.picture_as_pdf),
               label: const Text('PDF → WhatsApp / Share'),
             ),
+
             OutlinedButton.icon(
               onPressed: () async {
                 if (!form.currentState!.validate()) return;
@@ -688,6 +761,7 @@ Thank you for choosing SVT Tours & Transport!''';
               icon: const Icon(Icons.chat),
               label: const Text('WhatsApp Text Bill'),
             ),
+
             TextButton.icon(
               onPressed: clear,
               icon: const Icon(Icons.clear),
@@ -708,7 +782,7 @@ Thank you for choosing SVT Tours & Transport!''';
       startKm,
       closeKm,
       toll,
-      parking
+      parking,
     ]) {
       c.dispose();
     }
@@ -731,7 +805,8 @@ class _HistoryPageState extends State<HistoryPage> {
         if (from != null && b.startDate.isBefore(from!)) return false;
         if (to != null &&
             b.startDate.isAfter(
-                DateTime(to!.year, to!.month, to!.day, 23, 59, 59))) {
+              DateTime(to!.year, to!.month, to!.day, 23, 59, 59),
+            )) {
           return false;
         }
         return true;
@@ -762,16 +837,20 @@ class _HistoryPageState extends State<HistoryPage> {
                   OutlinedButton.icon(
                     onPressed: () => pick(true),
                     icon: const Icon(Icons.date_range),
-                    label: Text(from == null
-                        ? 'From Date'
-                        : DateFormat('dd/MM/yyyy').format(from!)),
+                    label: Text(
+                      from == null
+                          ? 'From Date'
+                          : DateFormat('dd/MM/yyyy').format(from!),
+                    ),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => pick(false),
                     icon: const Icon(Icons.date_range),
-                    label: Text(to == null
-                        ? 'To Date'
-                        : DateFormat('dd/MM/yyyy').format(to!)),
+                    label: Text(
+                      to == null
+                          ? 'To Date'
+                          : DateFormat('dd/MM/yyyy').format(to!),
+                    ),
                   ),
                   TextButton(
                     onPressed: () => setState(() {
@@ -793,12 +872,18 @@ class _HistoryPageState extends State<HistoryPage> {
                       final b = filtered[i];
                       return Card(
                         margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 5),
+                          horizontal: 12,
+                          vertical: 5,
+                        ),
                         child: ListTile(
                           title: Text(b.guest),
                           subtitle: Text(
-                              '${DateFormat('dd/MM/yyyy').format(b.startDate)} • ${b.vehicle} • ${b.totalKm.toStringAsFixed(0)} KM'),
-                          trailing: Text('Rs ${b.total.toStringAsFixed(0)}'),
+                            '${DateFormat('dd/MM/yyyy').format(b.startDate)} • '
+                            '${b.vehicle} • '
+                            '${b.totalKm.toStringAsFixed(0)} KM',
+                          ),
+                          trailing:
+                              Text('Rs ${b.total.toStringAsFixed(0)}'),
                         ),
                       );
                     },
@@ -832,6 +917,7 @@ class _PreBookingPageState extends State<PreBookingPage> {
   final phone = TextEditingController();
   final vehicle = TextEditingController();
   final details = TextEditingController();
+
   DateTime requiredDate = DateTime.now().add(const Duration(days: 1));
 
   Future<void> pickDate() async {
@@ -841,7 +927,10 @@ class _PreBookingPageState extends State<PreBookingPage> {
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
-    if (d != null) setState(() => requiredDate = d);
+
+    if (d != null) {
+      setState(() => requiredDate = d);
+    }
   }
 
   Future<void> save() async {
@@ -862,8 +951,9 @@ class _PreBookingPageState extends State<PreBookingPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('Pre-booking saved. Reminder set for one day before.')),
+          content:
+              Text('Pre-booking saved. Reminder set for one day before.'),
+        ),
       );
     }
   }
@@ -892,6 +982,7 @@ Details: ${b.details}''';
     phone.clear();
     vehicle.clear();
     details.clear();
+
     setState(() {
       requiredDate = DateTime.now().add(const Duration(days: 1));
     });
@@ -901,8 +992,10 @@ Details: ${b.details}''';
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Pre-Booking',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Pre-Booking',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 12),
           Form(
             key: form,
@@ -926,21 +1019,25 @@ Details: ${b.details}''';
                 TextFormField(
                   controller: vehicle,
                   decoration: const InputDecoration(
-                      labelText: 'Vehicle / Requirement'),
+                    labelText: 'Vehicle / Requirement',
+                  ),
                 ),
                 const SizedBox(height: 10),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                      'Vehicle Required Date: ${DateFormat('dd/MM/yyyy').format(requiredDate)}'),
+                    'Vehicle Required Date: '
+                    '${DateFormat('dd/MM/yyyy').format(requiredDate)}',
+                  ),
                   trailing: const Icon(Icons.calendar_month),
                   onTap: pickDate,
                 ),
                 TextFormField(
                   controller: details,
                   maxLines: 2,
-                  decoration:
-                      const InputDecoration(labelText: 'Details (Optional)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Details (Optional)',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
@@ -957,7 +1054,9 @@ Details: ${b.details}''';
               child: ListTile(
                 title: Text(b.guest),
                 subtitle: Text(
-                    '${b.vehicle} • ${DateFormat('dd/MM/yyyy').format(b.requiredDate)}'),
+                  '${b.vehicle} • '
+                  '${DateFormat('dd/MM/yyyy').format(b.requiredDate)}',
+                ),
                 trailing: Wrap(
                   children: [
                     IconButton(

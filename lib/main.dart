@@ -359,8 +359,9 @@ $reviewUrl
         const SizedBox(height:8),
         SizedBox(width:double.infinity,child:OutlinedButton.icon(onPressed:review,icon:const Icon(Icons.star),label:const Text('Review us on Google'))),
         TextButton.icon(onPressed:history,icon:const Icon(Icons.history),label:const Text('Booking / Guest History')),
-        TextButton(onPressed:clearForm,child:const Text('Clear Form')),
-      ])),
-    );
-  }
+        TextButton(onPressed:clearForm,child:const Text('Clear Form')),      ],
+    ),
+  ),
+);
+}
 }

@@ -710,7 +710,7 @@ class _BillPageState
 
       setState(() {
         guest.text =
-            contact.displayName;
+            contact.displayName ?? '';
 
         phone.text =
             contact.phones.first.number;

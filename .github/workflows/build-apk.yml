@@ -38,35 +38,25 @@ jobs:
           p = Path("android/app/build.gradle")
           s = p.read_text()
 
-          s = s.replace(
-              "compileOptions {",
-              """compileOptions {
-                  coreLibraryDesugaringEnabled true"""
-          )
-
-          if "coreLibraryDesugaring" not in s:
+          if "coreLibraryDesugaringEnabled true" not in s:
               s = s.replace(
-                  "dependencies {",
-                  """dependencies {
-                      coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
-                  """
+                  "compileOptions {",
+                  """compileOptions {
+                  coreLibraryDesugaringEnabled true""",
+                  1
               )
 
-          p.write_text(s)
-          PY
+          if "desugar_jdk_libs" not in s:
+              marker = "flutter {"
+              s = s.replace(
+                  marker,
+                  """dependencies {
+                  coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+              }
 
-      - name: Add notification permission
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("android/app/src/main/AndroidManifest.xml")
-          s = p.read_text()
-
-          permission = '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'
-
-          if permission not in s:
-              s = s.replace("<manifest", "<manifest\n    " + permission, 1)
+              flutter {""",
+                  1
+              )
 
           p.write_text(s)
           PY

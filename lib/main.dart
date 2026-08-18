@@ -153,8 +153,6 @@ Future<void> scheduleReminder(PreBooking b) async {
       ),
     ),
     androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-    uiLocalNotificationDateInterpretation:
-        UILocalNotificationDateInterpretation.absoluteTime,
   );
 }
 

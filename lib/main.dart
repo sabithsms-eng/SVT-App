@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,29 +15,49 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
-const googleReviewUrl = 'https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6';
+const googleReviewUrl =
+    'https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6';
+
 final notifications = FlutterLocalNotificationsPlugin();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   tz_data.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+
   await notifications.initialize(
     const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     ),
   );
+
   await notifications
       .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
+
   runApp(const SVTApp());
 }
 
 class Booking {
-  String id, guest, phone, vehicle, driver, details, billingType, vehicleType;
-  DateTime startDate, closeDate;
-  double startKm, closeKm, toll, parking, total;
+  String id;
+  String guest;
+  String phone;
+  String vehicle;
+  String driver;
+  String details;
+  String billingType;
+  String vehicleType;
+
+  DateTime startDate;
+  DateTime closeDate;
+
+  double startKm;
+  double closeKm;
+  double toll;
+  double parking;
+  double total;
 
   Booking({
     required this.id,
@@ -56,8 +77,11 @@ class Booking {
     required this.total,
   });
 
-  double get totalKm => (closeKm - startKm).clamp(0, double.infinity);
-  int get days => closeDate.difference(startDate).inDays + 1;
+  double get totalKm =>
+      (closeKm - startKm).clamp(0, double.infinity);
+
+  int get days =>
+      closeDate.difference(startDate).inDays + 1;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -97,7 +121,11 @@ class Booking {
 }
 
 class PreBooking {
-  String id, guest, phone, vehicle, details;
+  String id;
+  String guest;
+  String phone;
+  String vehicle;
+  String details;
   DateTime requiredDate;
 
   PreBooking({
@@ -147,12 +175,14 @@ Future<void> scheduleReminder(PreBooking b) async {
       android: AndroidNotificationDetails(
         'svt_booking',
         'SVT Booking Reminders',
-        channelDescription: 'Upcoming vehicle booking reminders',
+        channelDescription:
+            'Upcoming vehicle booking reminders',
         importance: Importance.high,
         priority: Priority.high,
       ),
     ),
-    androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    androidScheduleMode:
+        AndroidScheduleMode.inexactAllowWhileIdle,
   );
 }
 
@@ -160,28 +190,34 @@ class SVTApp extends StatelessWidget {
   const SVTApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'SVT Tours & Transport',
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          inputDecorationTheme:
-              const InputDecorationTheme(border: OutlineInputBorder()),
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'SVT Tours & Transport',
+      theme: ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
+        inputDecorationTheme:
+            const InputDecorationTheme(
+          border: OutlineInputBorder(),
         ),
-        home: const HomePage(),
-      );
+      ),
+      home: const HomePage(),
+    );
+  }
 }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePage> createState() =>
+      _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int tab = 0;
+
   final bookings = <Booking>[];
   final preBookings = <PreBooking>[];
 
@@ -190,6 +226,7 @@ class _HomePageState extends State<HomePage> {
   double suvRate = 4500;
   double includedKm = 100;
   double extraKmRate = 20;
+
   String officeWhatsApp = '';
 
   @override
@@ -199,31 +236,67 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> loadData() async {
-    final p = await SharedPreferences.getInstance();
+    final p =
+        await SharedPreferences.getInstance();
+
     setState(() {
       bookings
         ..clear()
-        ..addAll((p.getStringList('bookings') ?? [])
-            .map((e) => Booking.fromJson(jsonDecode(e))));
+        ..addAll(
+          (p.getStringList('bookings') ?? [])
+              .map(
+                (e) =>
+                    Booking.fromJson(jsonDecode(e)),
+              ),
+        );
+
       preBookings
         ..clear()
-        ..addAll((p.getStringList('prebookings') ?? [])
-            .map((e) => PreBooking.fromJson(jsonDecode(e))));
-      kmRate = p.getDouble('kmRate') ?? 20;
-      sedanRate = p.getDouble('sedanRate') ?? 3500;
-      suvRate = p.getDouble('suvRate') ?? 4500;
-      includedKm = p.getDouble('includedKm') ?? 100;
-      extraKmRate = p.getDouble('extraKmRate') ?? 20;
-      officeWhatsApp = p.getString('officeWhatsApp') ?? '';
+        ..addAll(
+          (p.getStringList('prebookings') ?? [])
+              .map(
+                (e) =>
+                    PreBooking.fromJson(jsonDecode(e)),
+              ),
+        );
+
+      kmRate =
+          p.getDouble('kmRate') ?? 20;
+
+      sedanRate =
+          p.getDouble('sedanRate') ?? 3500;
+
+      suvRate =
+          p.getDouble('suvRate') ?? 4500;
+
+      includedKm =
+          p.getDouble('includedKm') ?? 100;
+
+      extraKmRate =
+          p.getDouble('extraKmRate') ?? 20;
+
+      officeWhatsApp =
+          p.getString('officeWhatsApp') ?? '';
     });
   }
 
   Future<void> saveData() async {
-    final p = await SharedPreferences.getInstance();
+    final p =
+        await SharedPreferences.getInstance();
+
     await p.setStringList(
-        'bookings', bookings.map((e) => jsonEncode(e.toJson())).toList());
-    await p.setStringList('prebookings',
-        preBookings.map((e) => jsonEncode(e.toJson())).toList());
+      'bookings',
+      bookings
+          .map((e) => jsonEncode(e.toJson()))
+          .toList(),
+    );
+
+    await p.setStringList(
+      'prebookings',
+      preBookings
+          .map((e) => jsonEncode(e.toJson()))
+          .toList(),
+    );
   }
 
   Future<void> openSettings() async {
@@ -239,17 +312,25 @@ class _HomePageState extends State<HomePage> {
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Internal Settings'),
+        title:
+            const Text('Internal Settings'),
         content: SingleChildScrollView(
           child: Column(
             children: [
               setting('KM Rate', c[0]),
-              setting('Sedan Full Day Rate', c[1]),
-              setting('SUV Full Day Rate', c[2]),
-              setting('Included KM / Day', c[3]),
-              setting('Extra KM Rate', c[4]),
-              setting('Office WhatsApp Number', c[5],
-                  type: TextInputType.phone),
+              setting(
+                  'Sedan Full Day Rate', c[1]),
+              setting(
+                  'SUV Full Day Rate', c[2]),
+              setting(
+                  'Included KM / Day', c[3]),
+              setting(
+                  'Extra KM Rate', c[4]),
+              setting(
+                'Office WhatsApp Number',
+                c[5],
+                type: TextInputType.phone,
+              ),
               const SizedBox(height: 8),
               const Text(
                 'Rates are internal only and are never printed on the guest bill.',
@@ -260,26 +341,63 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+            onPressed: () =>
+                Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
-              final p = await SharedPreferences.getInstance();
+              final p =
+                  await SharedPreferences.getInstance();
+
               setState(() {
-                kmRate = double.tryParse(c[0].text) ?? kmRate;
-                sedanRate = double.tryParse(c[1].text) ?? sedanRate;
-                suvRate = double.tryParse(c[2].text) ?? suvRate;
-                includedKm = double.tryParse(c[3].text) ?? includedKm;
-                extraKmRate = double.tryParse(c[4].text) ?? extraKmRate;
-                officeWhatsApp = c[5].text.trim();
+                kmRate =
+                    double.tryParse(c[0].text) ??
+                        kmRate;
+
+                sedanRate =
+                    double.tryParse(c[1].text) ??
+                        sedanRate;
+
+                suvRate =
+                    double.tryParse(c[2].text) ??
+                        suvRate;
+
+                includedKm =
+                    double.tryParse(c[3].text) ??
+                        includedKm;
+
+                extraKmRate =
+                    double.tryParse(c[4].text) ??
+                        extraKmRate;
+
+                officeWhatsApp =
+                    c[5].text.trim();
               });
-              await p.setDouble('kmRate', kmRate);
-              await p.setDouble('sedanRate', sedanRate);
-              await p.setDouble('suvRate', suvRate);
-              await p.setDouble('includedKm', includedKm);
-              await p.setDouble('extraKmRate', extraKmRate);
-              await p.setString('officeWhatsApp', officeWhatsApp);
-              if (mounted) Navigator.pop(context);
+
+              await p.setDouble(
+                  'kmRate', kmRate);
+
+              await p.setDouble(
+                  'sedanRate', sedanRate);
+
+              await p.setDouble(
+                  'suvRate', suvRate);
+
+              await p.setDouble(
+                  'includedKm', includedKm);
+
+              await p.setDouble(
+                  'extraKmRate',
+                  extraKmRate);
+
+              await p.setString(
+                  'officeWhatsApp',
+                  officeWhatsApp);
+
+              if (mounted) {
+                Navigator.pop(context);
+              }
             },
             child: const Text('Save'),
           ),
@@ -288,85 +406,122 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget setting(String label, TextEditingController c,
-      {TextInputType type = TextInputType.number}) {
+  Widget setting(
+    String label,
+    TextEditingController c, {
+    TextInputType type =
+        TextInputType.number,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding:
+          const EdgeInsets.only(bottom: 8),
       child: TextField(
         controller: c,
         keyboardType: type,
-        decoration: InputDecoration(labelText: label),
+        decoration:
+            InputDecoration(labelText: label),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('SVT Tours & Transport'),
-          actions: [
-            IconButton(
-              tooltip: 'Google Review',
-              onPressed: () => launchUrl(Uri.parse(googleReviewUrl),
-                  mode: LaunchMode.externalApplication),
-              icon: const Icon(Icons.star),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title:
+            const Text('SVT Tours & Transport'),
+        actions: [
+          IconButton(
+            tooltip: 'Google Review',
+            onPressed: () => launchUrl(
+              Uri.parse(googleReviewUrl),
+              mode:
+                  LaunchMode.externalApplication,
             ),
-            IconButton(
-                onPressed: openSettings, icon: const Icon(Icons.settings)),
-          ],
-        ),
-        body: IndexedStack(
-          index: tab,
-          children: [
-            BillPage(
-              kmRate: kmRate,
-              sedanRate: sedanRate,
-              suvRate: suvRate,
-              includedKm: includedKm,
-              extraKmRate: extraKmRate,
-              onSaved: (b) async {
-                bookings.insert(0, b);
-                await saveData();
-                setState(() {});
-              },
-            ),
-            HistoryPage(bookings: bookings),
-            PreBookingPage(
-              preBookings: preBookings,
-              officeWhatsApp: officeWhatsApp,
-              onSaved: (b) async {
-                preBookings.insert(0, b);
-                await saveData();
-                await scheduleReminder(b);
-                setState(() {});
-              },
-              onDelete: (b) async {
-                preBookings.removeWhere((x) => x.id == b.id);
-                await saveData();
-                await notifications.cancel(b.id.hashCode);
-                setState(() {});
-              },
-            ),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: tab,
-          onDestinationSelected: (v) => setState(() => tab = v),
-          destinations: const [
-            NavigationDestination(
-                icon: Icon(Icons.receipt_long), label: 'New Bill'),
-            NavigationDestination(
-                icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(
-                icon: Icon(Icons.event_available), label: 'Pre-Booking'),
-          ],
-        ),
-      );
+            icon: const Icon(Icons.star),
+          ),
+          IconButton(
+            onPressed: openSettings,
+            icon: const Icon(Icons.settings),
+          ),
+        ],
+      ),
+      body: IndexedStack(
+        index: tab,
+        children: [
+          BillPage(
+            kmRate: kmRate,
+            sedanRate: sedanRate,
+            suvRate: suvRate,
+            includedKm: includedKm,
+            extraKmRate: extraKmRate,
+            onSaved: (b) async {
+              bookings.insert(0, b);
+              await saveData();
+              setState(() {});
+            },
+          ),
+          HistoryPage(
+            bookings: bookings,
+          ),
+          PreBookingPage(
+            preBookings: preBookings,
+            officeWhatsApp: officeWhatsApp,
+            onSaved: (b) async {
+              preBookings.insert(0, b);
+              await saveData();
+              await scheduleReminder(b);
+              setState(() {});
+            },
+            onDelete: (b) async {
+              preBookings.removeWhere(
+                (x) => x.id == b.id,
+              );
+
+              await saveData();
+
+              await notifications.cancel(
+                b.id.hashCode,
+              );
+
+              setState(() {});
+            },
+          ),
+        ],
+      ),
+      bottomNavigationBar:
+          NavigationBar(
+        selectedIndex: tab,
+        onDestinationSelected: (v) =>
+            setState(() => tab = v),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long),
+            label: 'New Bill',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history),
+            label: 'History',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_available),
+            label: 'Pre-Booking',
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class BillPage extends StatefulWidget {
-  final double kmRate, sedanRate, suvRate, includedKm, extraKmRate;
-  final Future<void> Function(Booking) onSaved;
+  final double kmRate;
+  final double sedanRate;
+  final double suvRate;
+  final double includedKm;
+  final double extraKmRate;
+
+  final Future<void> Function(Booking)
+      onSaved;
 
   const BillPage({
     super.key,
@@ -379,65 +534,129 @@ class BillPage extends StatefulWidget {
   });
 
   @override
-  State<BillPage> createState() => _BillPageState();
+  State<BillPage> createState() =>
+      _BillPageState();
 }
 
-class _BillPageState extends State<BillPage> {
-  final form = GlobalKey<FormState>();
-  final guest = TextEditingController();
-  final phone = TextEditingController();
-  final vehicle = TextEditingController();
-  final driver = TextEditingController();
-  final details = TextEditingController();
-  final startKm = TextEditingController();
-  final closeKm = TextEditingController();
-  final toll = TextEditingController(text: '0');
-  final parking = TextEditingController(text: '0');
+class _BillPageState
+    extends State<BillPage> {
+  final form =
+      GlobalKey<FormState>();
 
-  DateTime startDate = DateTime.now();
-  DateTime closeDate = DateTime.now();
+  final guest =
+      TextEditingController();
+
+  final phone =
+      TextEditingController();
+
+  final vehicle =
+      TextEditingController();
+
+  final driver =
+      TextEditingController();
+
+  final details =
+      TextEditingController();
+
+  final startKm =
+      TextEditingController();
+
+  final closeKm =
+      TextEditingController();
+
+  final toll =
+      TextEditingController(text: '0');
+
+  final parking =
+      TextEditingController(text: '0');
+
+  DateTime startDate =
+      DateTime.now();
+
+  DateTime closeDate =
+      DateTime.now();
+
   String billing = 'KM Based';
+
   String vehicleType = 'Sedan';
 
-  double n(TextEditingController c) => double.tryParse(c.text) ?? 0;
-  double get totalKm => (n(closeKm) - n(startKm)).clamp(0, double.infinity);
-  int get days => closeDate.difference(startDate).inDays + 1;
+  double n(TextEditingController c) =>
+      double.tryParse(c.text) ?? 0;
+
+  double get totalKm =>
+      (n(closeKm) - n(startKm))
+          .clamp(0, double.infinity);
+
+  int get days =>
+      closeDate
+          .difference(startDate)
+          .inDays +
+      1;
 
   double get total {
     if (billing == 'KM Based') {
-      return totalKm * widget.kmRate + n(toll) + n(parking);
+      return totalKm * widget.kmRate +
+          n(toll) +
+          n(parking);
     }
-    final base = vehicleType == 'SUV' ? widget.suvRate : widget.sedanRate;
+
+    final base =
+        vehicleType == 'SUV'
+            ? widget.suvRate
+            : widget.sedanRate;
+
     final extra =
-        (totalKm - widget.includedKm * days).clamp(0, double.infinity);
+        (totalKm -
+                widget.includedKm *
+                    days)
+            .clamp(0, double.infinity);
+
     return base * days +
-        extra * widget.extraKmRate +
+        extra *
+            widget.extraKmRate +
         n(toll) +
         n(parking);
   }
 
-  String date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
+  String date(DateTime d) =>
+      DateFormat('dd/MM/yyyy').format(d);
 
-  Future<void> chooseDate(bool start) async {
-    final d = await showDatePicker(
+  Future<void> chooseDate(
+      bool start) async {
+    final d =
+        await showDatePicker(
       context: context,
-      initialDate: start ? startDate : closeDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      initialDate:
+          start ? startDate : closeDate,
+      firstDate:
+          DateTime(2020),
+      lastDate:
+          DateTime(2100),
     );
+
     if (d == null) return;
+
     setState(() {
       if (start) {
         startDate = d;
-        if (closeDate.isBefore(d)) closeDate = d;
+
+        if (closeDate.isBefore(d)) {
+          closeDate = d;
+        }
       } else {
-        closeDate = d.isBefore(startDate) ? startDate : d;
+        closeDate =
+            d.isBefore(startDate)
+                ? startDate
+                : d;
       }
     });
   }
 
-  Booking makeBooking() => Booking(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+  Booking makeBooking() =>
+      Booking(
+        id: DateTime.now()
+            .microsecondsSinceEpoch
+            .toString(),
         guest: guest.text.trim(),
         phone: phone.text.trim(),
         vehicle: vehicle.text.trim(),
@@ -454,77 +673,302 @@ class _BillPageState extends State<BillPage> {
         total: total,
       );
 
-  Future<Uint8List> pdfBytes(Booking b) async {
+  Future<void> pickContact() async {
+    final permission =
+        await FlutterContacts.permissions
+            .request(PermissionType.read);
+
+    if (permission !=
+            PermissionStatus.granted &&
+        permission !=
+            PermissionStatus.limited) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Contacts permission is required'),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final contact =
+          await FlutterContacts.native
+              .showPicker(
+        properties: {
+          ContactProperty.phone,
+        },
+      );
+
+      if (contact == null ||
+          contact.phones.isEmpty) {
+        return;
+      }
+
+      setState(() {
+        guest.text =
+            contact.displayName;
+
+        phone.text =
+            contact.phones.first.number;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not open contacts: $e',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String whatsappNumber(
+      String value) {
+    var number =
+        value.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+
+    if (number.startsWith('00')) {
+      number = number.substring(2);
+    }
+
+    if (number.startsWith('0')) {
+      number = number.substring(1);
+    }
+
+    if (number.length == 10) {
+      number = '91$number';
+    }
+
+    return number;
+  }
+
+  Future<void>
+      openWhatsAppChat() async {
+    final number =
+        whatsappNumber(phone.text);
+
+    if (number.length < 10) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Enter a valid phone number'),
+          ),
+        );
+      }
+      return;
+    }
+
+    final url =
+        Uri.parse('https://wa.me/$number');
+
+    final opened =
+        await launchUrl(
+      url,
+      mode:
+          LaunchMode.externalApplication,
+    );
+
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+              'WhatsApp could not be opened'),
+        ),
+      );
+    }
+  }
+
+  Future<Uint8List> pdfBytes(
+      Booking b) async {
     final doc = pw.Document();
 
-    pw.Widget row(String a, String v) => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+    pw.Widget row(
+      String a,
+      String v,
+    ) =>
+        pw.Padding(
+          padding:
+              const pw.EdgeInsets.symmetric(
+            vertical: 4,
+          ),
           child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            crossAxisAlignment:
+                pw.CrossAxisAlignment.start,
             children: [
               pw.SizedBox(
                 width: 120,
-                child: pw.Text(a,
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                child: pw.Text(
+                  a,
+                  style: pw.TextStyle(
+                    fontWeight:
+                        pw.FontWeight.bold,
+                  ),
+                ),
               ),
-              pw.Expanded(child: pw.Text(v)),
+              pw.Expanded(
+                child: pw.Text(v),
+              ),
             ],
           ),
         );
 
     doc.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
-        build: (_) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+        pageFormat:
+            PdfPageFormat.a4,
+        margin:
+            const pw.EdgeInsets.all(28),
+        build: (_) =>
+            pw.Column(
+          crossAxisAlignment:
+              pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
               'SVT TOURS & TRANSPORT',
-              style:
-                  pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 22,
+                fontWeight:
+                    pw.FontWeight.bold,
+              ),
             ),
             pw.Text('TRIP BILL'),
             pw.Divider(),
-            row('Bill Date', date(DateTime.now())),
-            row('Guest', b.guest),
-            row('Phone', b.phone),
-            row('Vehicle Number', b.vehicle),
-            row('Vehicle Category', b.vehicleType),
-            if (b.driver.isNotEmpty) row('Driver', b.driver),
-            row('Starting Date', date(b.startDate)),
-            row('Closing Date', date(b.closeDate)),
-            row('Total Days', '${b.days}'),
-            row('Starting KM', b.startKm.toStringAsFixed(0)),
-            row('Closing KM', b.closeKm.toStringAsFixed(0)),
-            row('Total KM', b.totalKm.toStringAsFixed(0)),
-            if (b.details.isNotEmpty) row('Trip Details', b.details),
-            if (b.toll > 0) row('Toll', 'Rs ${b.toll.toStringAsFixed(2)}'),
+
+            row(
+              'Bill Date',
+              date(DateTime.now()),
+            ),
+
+            row(
+              'Guest',
+              b.guest,
+            ),
+
+            row(
+              'Phone',
+              b.phone,
+            ),
+
+            row(
+              'Vehicle Number',
+              b.vehicle,
+            ),
+
+            row(
+              'Vehicle Category',
+              b.vehicleType,
+            ),
+
+            if (b.driver.isNotEmpty)
+              row(
+                'Driver',
+                b.driver,
+              ),
+
+            row(
+              'Starting Date',
+              date(b.startDate),
+            ),
+
+            row(
+              'Closing Date',
+              date(b.closeDate),
+            ),
+
+            row(
+              'Total Days',
+              '${b.days}',
+            ),
+
+            row(
+              'Starting KM',
+              b.startKm
+                  .toStringAsFixed(0),
+            ),
+
+            row(
+              'Closing KM',
+              b.closeKm
+                  .toStringAsFixed(0),
+            ),
+
+            row(
+              'Total KM',
+              b.totalKm
+                  .toStringAsFixed(0),
+            ),
+
+            if (b.details.isNotEmpty)
+              row(
+                'Trip Details',
+                b.details,
+              ),
+
+            if (b.toll > 0)
+              row(
+                'Toll',
+                'Rs ${b.toll.toStringAsFixed(2)}',
+              ),
+
             if (b.parking > 0)
-              row('Parking', 'Rs ${b.parking.toStringAsFixed(2)}'),
-            pw.SizedBox(height: 14),
+              row(
+                'Parking',
+                'Rs ${b.parking.toStringAsFixed(2)}',
+              ),
+
+            pw.SizedBox(
+              height: 14,
+            ),
+
             pw.Divider(),
+
             pw.Align(
-              alignment: pw.Alignment.centerRight,
+              alignment:
+                  pw.Alignment.centerRight,
               child: pw.Text(
                 'TOTAL: Rs ${b.total.toStringAsFixed(2)}',
-                style:
-                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight:
+                      pw.FontWeight.bold,
+                ),
               ),
             ),
+
             pw.Spacer(),
+
             pw.Center(
               child: pw.Column(
                 children: [
                   pw.Text(
                     'Thank you for choosing SVT Tours & Transport!',
                   ),
-                  pw.SizedBox(height: 8),
+                  pw.SizedBox(
+                    height: 8,
+                  ),
                   pw.Text(
                     'Review us on Google:',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                      fontWeight:
+                          pw.FontWeight.bold,
+                    ),
                   ),
-                  pw.Text(googleReviewUrl),
+                  pw.Text(
+                    googleReviewUrl,
+                  ),
                 ],
               ),
             ),
@@ -536,19 +980,37 @@ class _BillPageState extends State<BillPage> {
     return doc.save();
   }
 
-  Future<void> sharePdf(Booking b) async {
-    final bytes = await pdfBytes(b);
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/SVT_${b.id}.pdf');
+  Future<void> sharePdf(
+      Booking b) async {
+    final bytes =
+        await pdfBytes(b);
+
+    final dir =
+        await getTemporaryDirectory();
+
+    final file = File(
+      '${dir.path}/SVT_${b.id}.pdf',
+    );
+
     await file.writeAsBytes(bytes);
+
     await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/pdf')],
-      text: 'SVT Tours & Transport bill for ${b.guest}',
+      [
+        XFile(
+          file.path,
+          mimeType:
+              'application/pdf',
+        ),
+      ],
+      text:
+          'SVT Tours & Transport bill for ${b.guest}',
     );
   }
 
-  Future<void> whatsappText(Booking b) async {
-    final text = '''SVT TOURS & TRANSPORT
+  Future<void> whatsappText(
+      Booking b) async {
+    final text =
+        '''SVT TOURS & TRANSPORT
 Trip Bill
 
 Guest: ${b.guest}
@@ -565,20 +1027,36 @@ Thank you for choosing SVT Tours & Transport!
 ⭐ Review us on Google:
 $googleReviewUrl''';
 
-    final number = b.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final number =
+        whatsappNumber(b.phone);
 
     await launchUrl(
-      Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(text)}'),
-      mode: LaunchMode.externalApplication,
+      Uri.parse(
+        'https://wa.me/$number?text=${Uri.encodeComponent(text)}',
+      ),
+      mode:
+          LaunchMode.externalApplication,
     );
   }
 
   Future<void> saveBooking() async {
-    if (!form.currentState!.validate()) return;
-    await widget.onSaved(makeBooking());
+    if (!form.currentState!
+        .validate()) {
+      return;
+    }
+
+    await widget.onSaved(
+      makeBooking(),
+    );
+
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking saved successfully')),
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Booking saved successfully',
+          ),
+        ),
       );
     }
   }
@@ -591,7 +1069,7 @@ $googleReviewUrl''';
       driver,
       details,
       startKm,
-      closeKm
+      closeKm,
     ]) {
       c.clear();
     }
@@ -600,9 +1078,14 @@ $googleReviewUrl''';
     parking.text = '0';
 
     setState(() {
-      startDate = DateTime.now();
-      closeDate = DateTime.now();
+      startDate =
+          DateTime.now();
+
+      closeDate =
+          DateTime.now();
+
       billing = 'KM Based';
+
       vehicleType = 'Sedan';
     });
   }
@@ -611,165 +1094,314 @@ $googleReviewUrl''';
     String label,
     TextEditingController c, {
     bool required = false,
-    TextInputType type = TextInputType.text,
+    TextInputType type =
+        TextInputType.text,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding:
+          const EdgeInsets.only(
+        bottom: 10,
+      ),
       child: TextFormField(
         controller: c,
         keyboardType: type,
-        onChanged: (_) => setState(() {}),
+        onChanged: (_) =>
+            setState(() {}),
         validator: required
-            ? (v) => v == null || v.trim().isEmpty ? 'Required' : null
+            ? (v) =>
+                v == null ||
+                        v.trim().isEmpty
+                    ? 'Required'
+                    : null
             : null,
-        decoration: InputDecoration(labelText: label),
+        decoration:
+            InputDecoration(
+          labelText: label,
+        ),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) => Form(
-        key: form,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            field('Guest Name', guest, required: true),
-            field(
-              'Guest Phone',
-              phone,
-              required: true,
-              type: TextInputType.phone,
-            ),
-            field('Vehicle Number', vehicle, required: true),
+  Widget build(
+      BuildContext context) {
+    return Form(
+      key: form,
+      child: ListView(
+        padding:
+            const EdgeInsets.all(16),
+        children: [
+          field(
+            'Guest Name',
+            guest,
+            required: true,
+          ),
 
-            // Internal billing option
-            DropdownButtonFormField<String>(
-              value: billing,
-              decoration: const InputDecoration(labelText: 'Billing Type'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'KM Based',
-                  child: Text('KM Based'),
-                ),
-                DropdownMenuItem(
-                  value: 'Full Day',
-                  child: Text('Full Day'),
-                ),
-              ],
-              onChanged: (v) => setState(() => billing = v!),
-            ),
+          field(
+            'Guest Phone',
+            phone,
+            required: true,
+            type:
+                TextInputType.phone,
+          ),
 
-            const SizedBox(height: 10),
-
-            // Vehicle category is always selectable
-            DropdownButtonFormField<String>(
-              value: vehicleType,
-              decoration:
-                  const InputDecoration(labelText: 'Vehicle Category'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'Sedan',
-                  child: Text('Sedan'),
-                ),
-                DropdownMenuItem(
-                  value: 'SUV',
-                  child: Text('SUV'),
-                ),
-              ],
-              onChanged: (v) => setState(() => vehicleType = v!),
-            ),
-
-            const SizedBox(height: 10),
-
-            field(
-              'Starting KM',
-              startKm,
-              type: TextInputType.number,
-            ),
-            field(
-              'Closing KM',
-              closeKm,
-              type: TextInputType.number,
-            ),
-
-            Text('Total KM: ${totalKm.toStringAsFixed(0)}'),
-
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Starting Date: ${date(startDate)}'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () => chooseDate(true),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Closing Date: ${date(closeDate)}'),
-              trailing: const Icon(Icons.calendar_today),
-              onTap: () => chooseDate(false),
-            ),
-
-            Text('Total Days: $days'),
-
-            const SizedBox(height: 10),
-
-            field('Driver Name (Optional)', driver),
-            field('Details of Trip (Optional)', details),
-
-            field(
-              'Toll Amount (Optional)',
-              toll,
-              type: TextInputType.number,
-            ),
-
-            field(
-              'Parking Amount (Optional)',
-              parking,
-              type: TextInputType.number,
-            ),
-
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Total Amount: Rs ${total.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.headlineSmall,
+          Row(
+            children: [
+              Expanded(
+                child:
+                    OutlinedButton.icon(
+                  onPressed:
+                      pickContact,
+                  icon: const Icon(
+                      Icons.contacts),
+                  label: const Text(
+                      'Select Contact'),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 8),
+              const SizedBox(
+                width: 8,
+              ),
 
-            FilledButton.icon(
-              onPressed: saveBooking,
-              icon: const Icon(Icons.save),
-              label: const Text('Save Booking'),
-            ),
+              Expanded(
+                child:
+                    OutlinedButton.icon(
+                  onPressed:
+                      openWhatsAppChat,
+                  icon: const Icon(
+                      Icons.chat),
+                  label: const Text(
+                      'WhatsApp'),
+                ),
+              ),
+            ],
+          ),
 
-            OutlinedButton.icon(
-              onPressed: () async {
-                if (!form.currentState!.validate()) return;
-                await sharePdf(makeBooking());
-              },
-              icon: const Icon(Icons.picture_as_pdf),
-              label: const Text('PDF → WhatsApp / Share'),
-            ),
+          const SizedBox(
+            height: 10,
+          ),
 
-            OutlinedButton.icon(
-              onPressed: () async {
-                if (!form.currentState!.validate()) return;
-                await whatsappText(makeBooking());
-              },
-              icon: const Icon(Icons.chat),
-              label: const Text('WhatsApp Text Bill'),
-            ),
+          field(
+            'Vehicle Number',
+            vehicle,
+            required: true,
+          ),
 
-            TextButton.icon(
-              onPressed: clear,
-              icon: const Icon(Icons.clear),
-              label: const Text('Clear Form'),
+          DropdownButtonFormField<
+              String>(
+            value: billing,
+            decoration:
+                const InputDecoration(
+              labelText:
+                  'Billing Type',
             ),
-          ],
-        ),
-      );
+            items: const [
+              DropdownMenuItem(
+                value: 'KM Based',
+                child:
+                    Text('KM Based'),
+              ),
+              DropdownMenuItem(
+                value: 'Full Day',
+                child:
+                    Text('Full Day'),
+              ),
+            ],
+            onChanged: (v) {
+              if (v != null) {
+                setState(() =>
+                    billing = v);
+              }
+            },
+          ),
+
+          const SizedBox(
+            height: 10,
+          ),
+
+          DropdownButtonFormField<
+              String>(
+            value: vehicleType,
+            decoration:
+                const InputDecoration(
+              labelText:
+                  'Vehicle Category',
+            ),
+            items: const [
+              DropdownMenuItem(
+                value: 'Sedan',
+                child:
+                    Text('Sedan'),
+              ),
+              DropdownMenuItem(
+                value: 'SUV',
+                child:
+                    Text('SUV'),
+              ),
+            ],
+            onChanged: (v) {
+              if (v != null) {
+                setState(() =>
+                    vehicleType = v);
+              }
+            },
+          ),
+
+          const SizedBox(
+            height: 10,
+          ),
+
+          field(
+            'Starting KM',
+            startKm,
+            type:
+                TextInputType.number,
+          ),
+
+          field(
+            'Closing KM',
+            closeKm,
+            type:
+                TextInputType.number,
+          ),
+
+          Text(
+            'Total KM: ${totalKm.toStringAsFixed(0)}',
+          ),
+
+          ListTile(
+            contentPadding:
+                EdgeInsets.zero,
+            title: Text(
+              'Starting Date: ${date(startDate)}',
+            ),
+            trailing: const Icon(
+              Icons.calendar_today,
+            ),
+            onTap: () =>
+                chooseDate(true),
+          ),
+
+          ListTile(
+            contentPadding:
+                EdgeInsets.zero,
+            title: Text(
+              'Closing Date: ${date(closeDate)}',
+            ),
+            trailing: const Icon(
+              Icons.calendar_today,
+            ),
+            onTap: () =>
+                chooseDate(false),
+          ),
+
+          Text(
+            'Total Days: $days',
+          ),
+
+          const SizedBox(
+            height: 10,
+          ),
+
+          field(
+            'Driver Name (Optional)',
+            driver,
+          ),
+
+          field(
+            'Details of Trip (Optional)',
+            details,
+          ),
+
+          field(
+            'Toll Amount (Optional)',
+            toll,
+            type:
+                TextInputType.number,
+          ),
+
+          field(
+            'Parking Amount (Optional)',
+            parking,
+            type:
+                TextInputType.number,
+          ),
+
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(
+                16,
+              ),
+              child: Text(
+                'Total Amount: Rs ${total.toStringAsFixed(2)}',
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall,
+              ),
+            ),
+          ),
+
+          const SizedBox(
+            height: 8,
+          ),
+
+          FilledButton.icon(
+            onPressed:
+                saveBooking,
+            icon: const Icon(
+                Icons.save),
+            label: const Text(
+                'Save Booking'),
+          ),
+
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (!form.currentState!
+                  .validate()) {
+                return;
+              }
+
+              await sharePdf(
+                makeBooking(),
+              );
+            },
+            icon: const Icon(
+                Icons.picture_as_pdf),
+            label: const Text(
+              'PDF → WhatsApp / Share',
+            ),
+          ),
+
+          OutlinedButton.icon(
+            onPressed: () async {
+              if (!form.currentState!
+                  .validate()) {
+                return;
+              }
+
+              await whatsappText(
+                makeBooking(),
+              );
+            },
+            icon: const Icon(
+                Icons.chat),
+            label: const Text(
+              'WhatsApp Text Bill',
+            ),
+          ),
+
+          TextButton.icon(
+            onPressed: clear,
+            icon: const Icon(
+                Icons.clear),
+            label: const Text(
+                'Clear Form'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -786,118 +1418,198 @@ $googleReviewUrl''';
     ]) {
       c.dispose();
     }
+
     super.dispose();
   }
 }
 
-class HistoryPage extends StatefulWidget {
+class HistoryPage
+    extends StatefulWidget {
   final List<Booking> bookings;
-  const HistoryPage({super.key, required this.bookings});
+
+  const HistoryPage({
+    super.key,
+    required this.bookings,
+  });
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  State<HistoryPage>
+      createState() =>
+          _HistoryPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
-  DateTime? from, to;
+class _HistoryPageState
+    extends State<HistoryPage> {
+  DateTime? from;
+  DateTime? to;
 
-  List<Booking> get filtered => widget.bookings.where((b) {
-        if (from != null && b.startDate.isBefore(from!)) return false;
+  List<Booking> get filtered =>
+      widget.bookings.where((b) {
+        if (from != null &&
+            b.startDate
+                .isBefore(from!)) {
+          return false;
+        }
+
         if (to != null &&
             b.startDate.isAfter(
-              DateTime(to!.year, to!.month, to!.day, 23, 59, 59),
+              DateTime(
+                to!.year,
+                to!.month,
+                to!.day,
+                23,
+                59,
+                59,
+              ),
             )) {
           return false;
         }
+
         return true;
       }).toList();
 
-  Future<void> pick(bool isFrom) async {
-    final d = await showDatePicker(
+  Future<void> pick(
+      bool isFrom) async {
+    final d =
+        await showDatePicker(
       context: context,
-      initialDate: isFrom ? (from ?? DateTime.now()) : (to ?? DateTime.now()),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      initialDate: isFrom
+          ? (from ??
+              DateTime.now())
+          : (to ??
+              DateTime.now()),
+      firstDate:
+          DateTime(2020),
+      lastDate:
+          DateTime(2100),
     );
+
     if (d != null) {
-      setState(() => isFrom ? from = d : to = d);
+      setState(() {
+        if (isFrom) {
+          from = d;
+        } else {
+          to = d;
+        }
+      });
     }
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          Card(
-            margin: const EdgeInsets.all(12),
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () => pick(true),
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      from == null
-                          ? 'From Date'
-                          : DateFormat('dd/MM/yyyy').format(from!),
-                    ),
+  Widget build(
+      BuildContext context) {
+    return Column(
+      children: [
+        Card(
+          margin:
+              const EdgeInsets.all(12),
+          child: Padding(
+            padding:
+                const EdgeInsets.all(8),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      pick(true),
+                  icon: const Icon(
+                      Icons.date_range),
+                  label: Text(
+                    from == null
+                        ? 'From Date'
+                        : DateFormat(
+                            'dd/MM/yyyy')
+                            .format(from!),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () => pick(false),
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      to == null
-                          ? 'To Date'
-                          : DateFormat('dd/MM/yyyy').format(to!),
-                    ),
+                ),
+
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      pick(false),
+                  icon: const Icon(
+                      Icons.date_range),
+                  label: Text(
+                    to == null
+                        ? 'To Date'
+                        : DateFormat(
+                            'dd/MM/yyyy')
+                            .format(to!),
                   ),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      from = null;
-                      to = null;
-                    }),
-                    child: const Text('Clear Filter'),
-                  ),
-                ],
-              ),
+                ),
+
+                TextButton(
+                  onPressed: () =>
+                      setState(() {
+                    from = null;
+                    to = null;
+                  }),
+                  child: const Text(
+                      'Clear Filter'),
+                ),
+              ],
             ),
           ),
-          Expanded(
-            child: filtered.isEmpty
-                ? const Center(child: Text('No bookings found'))
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final b = filtered[i];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        child: ListTile(
-                          title: Text(b.guest),
-                          subtitle: Text(
-                            '${DateFormat('dd/MM/yyyy').format(b.startDate)} • '
-                            '${b.vehicle} • '
-                            '${b.totalKm.toStringAsFixed(0)} KM',
-                          ),
-                          trailing:
-                              Text('Rs ${b.total.toStringAsFixed(0)}'),
-                        ),
-                      );
-                    },
+        ),
+
+        Expanded(
+          child: filtered.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No bookings found',
                   ),
-          ),
-        ],
-      );
+                )
+              : ListView.builder(
+                  itemCount:
+                      filtered.length,
+                  itemBuilder:
+                      (_, i) {
+                    final b =
+                        filtered[i];
+
+                    return Card(
+                      margin:
+                          const EdgeInsets
+                              .symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      child: ListTile(
+                        title:
+                            Text(b.guest),
+                        subtitle:
+                            Text(
+                          '${DateFormat('dd/MM/yyyy').format(b.startDate)} • '
+                          '${b.vehicle} • '
+                          '${b.totalKm.toStringAsFixed(0)} KM',
+                        ),
+                        trailing:
+                            Text(
+                          'Rs ${b.total.toStringAsFixed(0)}',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 }
 
-class PreBookingPage extends StatefulWidget {
-  final List<PreBooking> preBookings;
+class PreBookingPage
+    extends StatefulWidget {
+  final List<PreBooking>
+      preBookings;
+
   final String officeWhatsApp;
-  final Future<void> Function(PreBooking) onSaved;
-  final Future<void> Function(PreBooking) onDelete;
+
+  final Future<void> Function(
+      PreBooking)
+      onSaved;
+
+  final Future<void> Function(
+      PreBooking)
+      onDelete;
 
   const PreBookingPage({
     super.key,
@@ -908,36 +1620,61 @@ class PreBookingPage extends StatefulWidget {
   });
 
   @override
-  State<PreBookingPage> createState() => _PreBookingPageState();
+  State<PreBookingPage>
+      createState() =>
+          _PreBookingPageState();
 }
 
-class _PreBookingPageState extends State<PreBookingPage> {
-  final form = GlobalKey<FormState>();
-  final guest = TextEditingController();
-  final phone = TextEditingController();
-  final vehicle = TextEditingController();
-  final details = TextEditingController();
+class _PreBookingPageState
+    extends State<PreBookingPage> {
+  final form =
+      GlobalKey<FormState>();
 
-  DateTime requiredDate = DateTime.now().add(const Duration(days: 1));
+  final guest =
+      TextEditingController();
+
+  final phone =
+      TextEditingController();
+
+  final vehicle =
+      TextEditingController();
+
+  final details =
+      TextEditingController();
+
+  DateTime requiredDate =
+      DateTime.now().add(
+    const Duration(days: 1),
+  );
 
   Future<void> pickDate() async {
-    final d = await showDatePicker(
+    final d =
+        await showDatePicker(
       context: context,
-      initialDate: requiredDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
+      initialDate:
+          requiredDate,
+      firstDate:
+          DateTime.now(),
+      lastDate:
+          DateTime(2100),
     );
 
     if (d != null) {
-      setState(() => requiredDate = d);
+      setState(() =>
+          requiredDate = d);
     }
   }
 
   Future<void> save() async {
-    if (!form.currentState!.validate()) return;
+    if (!form.currentState!
+        .validate()) {
+      return;
+    }
 
     final b = PreBooking(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: DateTime.now()
+          .microsecondsSinceEpoch
+          .toString(),
       guest: guest.text.trim(),
       phone: phone.text.trim(),
       vehicle: vehicle.text.trim(),
@@ -946,25 +1683,37 @@ class _PreBookingPageState extends State<PreBookingPage> {
     );
 
     await widget.onSaved(b);
+
     clear();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context)
+          .showSnackBar(
         const SnackBar(
-          content:
-              Text('Pre-booking saved. Reminder set for one day before.'),
+          content: Text(
+            'Pre-booking saved. Reminder set for one day before.',
+          ),
         ),
       );
     }
   }
 
-  Future<void> sendRequirement(PreBooking b) async {
-    final number = (widget.officeWhatsApp.isNotEmpty
+  Future<void>
+      sendRequirement(
+    PreBooking b,
+  ) async {
+    final number =
+        (widget.officeWhatsApp
+                .isNotEmpty
             ? widget.officeWhatsApp
             : b.phone)
-        .replaceAll(RegExp(r'[^0-9]'), '');
+            .replaceAll(
+          RegExp(r'[^0-9]'),
+          '',
+        );
 
-    final text = '''SVT PRE-BOOKING REQUIREMENT
+    final text =
+        '''SVT PRE-BOOKING REQUIREMENT
 Guest: ${b.guest}
 Guest Phone: ${b.phone}
 Vehicle / Requirement: ${b.vehicle}
@@ -972,8 +1721,11 @@ Vehicle Required Date: ${DateFormat('dd/MM/yyyy').format(b.requiredDate)}
 Details: ${b.details}''';
 
     await launchUrl(
-      Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(text)}'),
-      mode: LaunchMode.externalApplication,
+      Uri.parse(
+        'https://wa.me/$number?text=${Uri.encodeComponent(text)}',
+      ),
+      mode:
+          LaunchMode.externalApplication,
     );
   }
 
@@ -984,98 +1736,167 @@ Details: ${b.details}''';
     details.clear();
 
     setState(() {
-      requiredDate = DateTime.now().add(const Duration(days: 1));
+      requiredDate =
+          DateTime.now().add(
+        const Duration(days: 1),
+      );
     });
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Pre-Booking',
-            style: Theme.of(context).textTheme.headlineSmall,
+  Widget build(
+      BuildContext context) {
+    return ListView(
+      padding:
+          const EdgeInsets.all(16),
+      children: [
+        Text(
+          'Pre-Booking',
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall,
+        ),
+
+        const SizedBox(
+          height: 12,
+        ),
+
+        Form(
+          key: form,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: guest,
+                validator: (v) =>
+                    v == null ||
+                            v.trim().isEmpty
+                        ? 'Required'
+                        : null,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Guest Name',
+                ),
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              TextFormField(
+                controller: phone,
+                keyboardType:
+                    TextInputType.phone,
+                validator: (v) =>
+                    v == null ||
+                            v.trim().isEmpty
+                        ? 'Required'
+                        : null,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Guest Phone',
+                ),
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              TextFormField(
+                controller: vehicle,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Vehicle / Requirement',
+                ),
+              ),
+
+              const SizedBox(
+                height: 10,
+              ),
+
+              ListTile(
+                contentPadding:
+                    EdgeInsets.zero,
+                title: Text(
+                  'Vehicle Required Date: '
+                  '${DateFormat('dd/MM/yyyy').format(requiredDate)}',
+                ),
+                trailing:
+                    const Icon(
+                  Icons.calendar_month,
+                ),
+                onTap: pickDate,
+              ),
+
+              TextFormField(
+                controller: details,
+                maxLines: 2,
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Details (Optional)',
+                ),
+              ),
+
+              const SizedBox(
+                height: 12,
+              ),
+
+              FilledButton.icon(
+                onPressed: save,
+                icon: const Icon(
+                    Icons.notifications_active),
+                label: const Text(
+                    'Save + Reminder'),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Form(
-            key: form,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: guest,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Required' : null,
-                  decoration: const InputDecoration(labelText: 'Guest Name'),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: phone,
-                  keyboardType: TextInputType.phone,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Required' : null,
-                  decoration: const InputDecoration(labelText: 'Guest Phone'),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: vehicle,
-                  decoration: const InputDecoration(
-                    labelText: 'Vehicle / Requirement',
+        ),
+
+        const SizedBox(
+          height: 18,
+        ),
+
+        ...widget.preBookings.map(
+          (b) => Card(
+            child: ListTile(
+              title:
+                  Text(b.guest),
+              subtitle:
+                  Text(
+                '${b.vehicle} • '
+                '${DateFormat('dd/MM/yyyy').format(b.requiredDate)}',
+              ),
+              trailing:
+                  Wrap(
+                children: [
+                  IconButton(
+                    tooltip:
+                        'WhatsApp requirement',
+                    onPressed: () =>
+                        sendRequirement(b),
+                    icon:
+                        const Icon(Icons.chat),
                   ),
-                ),
-                const SizedBox(height: 10),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    'Vehicle Required Date: '
-                    '${DateFormat('dd/MM/yyyy').format(requiredDate)}',
-                  ),
-                  trailing: const Icon(Icons.calendar_month),
-                  onTap: pickDate,
-                ),
-                TextFormField(
-                  controller: details,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Details (Optional)',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: save,
-                  icon: const Icon(Icons.notifications_active),
-                  label: const Text('Save + Reminder'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          ...widget.preBookings.map(
-            (b) => Card(
-              child: ListTile(
-                title: Text(b.guest),
-                subtitle: Text(
-                  '${b.vehicle} • '
-                  '${DateFormat('dd/MM/yyyy').format(b.requiredDate)}',
-                ),
-                trailing: Wrap(
-                  children: [
-                    IconButton(
-                      tooltip: 'WhatsApp requirement',
-                      onPressed: () => sendRequirement(b),
-                      icon: const Icon(Icons.chat),
+                  IconButton(
+                    tooltip: 'Delete',
+                    onPressed: () =>
+                        widget.onDelete(b),
+                    icon:
+                        const Icon(
+                      Icons.delete_outline,
                     ),
-                    IconButton(
-                      tooltip: 'Delete',
-                      onPressed: () => widget.onDelete(b),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
-      );
+        ),
+      ],
+    );
+  }
 
   @override
   void dispose() {

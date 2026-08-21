@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -610,7 +610,9 @@ Toll: Rs ${b.toll.toStringAsFixed(2)}
 Parking: Rs ${b.parking.toStringAsFixed(2)}
 Total Amount: Rs ${b.total.toStringAsFixed(2)}
 
-Thank you for choosing SVT Tours & Transport!''';
+Thank you for choosing SVT Tours & Transport!
+
+Google Review: $googleReviewUrl''';
 
     final number = b.phone.replaceAll(RegExp(r'[^0-9]'), '');
     await launchUrl(
@@ -640,51 +642,12 @@ Thank you for choosing SVT Tours & Transport!''';
       return;
     }
 
-    final contacts = (await FlutterContacts.getContacts(withProperties: true))
-        .where((contact) => contact.phones.isNotEmpty)
-        .toList();
-    if (!mounted) return;
-    final selected = await showModalBottomSheet<Contact>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: ListView.builder(
-          itemCount: contacts.length,
-          itemBuilder: (context, index) {
-            final contact = contacts[index];
-            return ListTile(
-              title: Text(contact.displayName),
-              subtitle:
-                  Text(contact.phones.map((phone) => phone.number).join(', ')),
-              onTap: () => Navigator.pop(context, contact),
-            );
-          },
-        ),
-      ),
-    );
+    final selected = await const MethodChannel('svt/contact_picker')
+        .invokeMethod<Map<Object?, Object?>>('pickContact');
     if (!mounted || selected == null) return;
-
-    final selectedNumber = selected.phones.length == 1
-        ? selected.phones.first.number
-        : await showDialog<String>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text('Choose a number for ${selected.displayName}'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: selected.phones
-                    .map((contactPhone) => ListTile(
-                          title: Text(contactPhone.number),
-                          onTap: () =>
-                              Navigator.pop(context, contactPhone.number),
-                        ))
-                    .toList(),
-              ),
-            ),
-          );
-    if (!mounted || selectedNumber == null) return;
     setState(() {
-      guest.text = selected.displayName;
-      phone.text = selectedNumber;
+      guest.text = selected['name'] as String? ?? '';
+      phone.text = selected['phone'] as String? ?? '';
     });
   }
 

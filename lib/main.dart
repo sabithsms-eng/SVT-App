@@ -1,11 +1,10 @@
-import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -91,9 +90,9 @@ class Booking {
         closeDate: DateTime.parse(j['closeDate']),
         startKm: (j['startKm'] ?? 0).toDouble(),
         closeKm: (j['closeKm'] ?? 0).toDouble(),
-        totalKmValue: (j['totalKm'] ??
-            ((j['closeKm'] ?? 0) - (j['startKm'] ?? 0)))
-          .toDouble(),
+        totalKmValue:
+            (j['totalKm'] ?? ((j['closeKm'] ?? 0) - (j['startKm'] ?? 0)))
+                .toDouble(),
         toll: (j['toll'] ?? 0).toDouble(),
         parking: (j['parking'] ?? 0).toDouble(),
         billingType: j['billingType'] ?? 'KM Based',
@@ -228,8 +227,8 @@ class _HomePageState extends State<HomePage> {
     final p = await SharedPreferences.getInstance();
     await p.setStringList(
         'bookings', bookings.map((e) => jsonEncode(e.toJson())).toList());
-    await p.setStringList('prebookings',
-        preBookings.map((e) => jsonEncode(e.toJson())).toList());
+    await p.setStringList(
+        'prebookings', preBookings.map((e) => jsonEncode(e.toJson())).toList());
   }
 
   Future<void> openSettings() async {
@@ -361,8 +360,7 @@ class _HomePageState extends State<HomePage> {
           destinations: const [
             NavigationDestination(
                 icon: Icon(Icons.receipt_long), label: 'New Bill'),
-            NavigationDestination(
-                icon: Icon(Icons.history), label: 'History'),
+            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
             NavigationDestination(
                 icon: Icon(Icons.event_available), label: 'Pre-Booking'),
           ],
@@ -416,9 +414,13 @@ class _BillPageState extends State<BillPage> {
       return totalKm * widget.kmRate + n(toll) + n(parking);
     }
     final base = vehicleType == 'SUV' ? widget.suvRate : widget.sedanRate;
-    final extra = (totalKm - widget.includedKm * days).clamp(0, double.infinity);
+    final extra =
+        (totalKm - widget.includedKm * days).clamp(0, double.infinity);
     return base * days + extra * widget.extraKmRate + n(toll) + n(parking);
   }
+
+  double serviceCharges(Booking b) =>
+      (b.total - b.toll - b.parking).clamp(0, double.infinity).toDouble();
 
   String date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
 
@@ -462,19 +464,44 @@ class _BillPageState extends State<BillPage> {
   Future<Uint8List> pdfBytes(Booking b) async {
     final doc = pw.Document();
 
-    pw.Widget row(String a, String v) => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.SizedBox(
-                width: 120,
-                child: pw.Text(a,
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+    pw.TableRow detailRow(String label, String value) => pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(7),
+              child: pw.Text(label,
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(7),
+              child: pw.Text(value),
+            ),
+          ],
+        );
+
+    pw.TableRow chargeRow(String label, double value,
+            {bool emphasize = false}) =>
+        pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(label,
+                  style: pw.TextStyle(
+                      fontWeight: emphasize
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal)),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text('Rs ${value.toStringAsFixed(2)}',
+                    style: pw.TextStyle(
+                        fontWeight: emphasize
+                            ? pw.FontWeight.bold
+                            : pw.FontWeight.normal)),
               ),
-              pw.Expanded(child: pw.Text(v)),
-            ],
-          ),
+            ),
+          ],
         );
 
     doc.addPage(
@@ -484,36 +511,56 @@ class _BillPageState extends State<BillPage> {
         build: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('SVT TOURS & TRANSPORT',
-                style:
-                    pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
-            pw.Text('TRIP BILL'),
-            pw.Divider(),
-            row('Bill Date', date(DateTime.now())),
-            row('Guest', b.guest),
-            row('Phone', b.phone),
-            row('Vehicle', b.vehicleType),
-            row('Vehicle Number', b.vehicle),
-            if (b.driver.isNotEmpty) row('Driver', b.driver),
-            row('Starting Date', date(b.startDate)),
-            row('Closing Date', date(b.closeDate)),
-            row('Total Days', '${b.days}'),
-            row('Starting KM', b.startKm.toStringAsFixed(0)),
-            row('Closing KM', b.closeKm.toStringAsFixed(0)),
-            row('Total KM', b.totalKm.toStringAsFixed(0)),
-            if (b.details.isNotEmpty) row('Trip Details', b.details),
-            if (b.toll > 0) row('Toll', 'Rs ${b.toll.toStringAsFixed(2)}'),
-            if (b.parking > 0)
-              row('Parking', 'Rs ${b.parking.toStringAsFixed(2)}'),
+            pw.Center(
+              child: pw.Text('SVT TOURS & TRANSPORT',
+                  style: pw.TextStyle(
+                      fontSize: 21, fontWeight: pw.FontWeight.bold)),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Center(
+              child: pw.Text('TRIP BILL / TRIP INVOICE',
+                  style: pw.TextStyle(
+                      fontSize: 13, fontWeight: pw.FontWeight.bold)),
+            ),
             pw.SizedBox(height: 14),
-            pw.Divider(),
-            pw.Align(
-              alignment: pw.Alignment.centerRight,
-              child: pw.Text(
-                'TOTAL: Rs ${b.total.toStringAsFixed(2)}',
-                style:
-                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-              ),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey600),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(2),
+              },
+              children: [
+                detailRow('Bill Date', date(DateTime.now())),
+                detailRow('Guest Name', b.guest),
+                detailRow('Guest Phone', b.phone),
+                detailRow('Vehicle Number', b.vehicle),
+                detailRow('Vehicle Type', b.vehicleType),
+                detailRow('Starting Date', date(b.startDate)),
+                detailRow('Closing Date', date(b.closeDate)),
+                detailRow('Total Days', '${b.days}'),
+                detailRow('Starting KM', b.startKm.toStringAsFixed(0)),
+                detailRow('Closing KM', b.closeKm.toStringAsFixed(0)),
+                detailRow('Total KM', b.totalKm.toStringAsFixed(0)),
+                if (b.driver.isNotEmpty) detailRow('Driver', b.driver),
+                if (b.details.isNotEmpty) detailRow('Trip Details', b.details),
+              ],
+            ),
+            pw.SizedBox(height: 18),
+            pw.Text('CHARGES',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 5),
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey600),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(2),
+                1: const pw.FlexColumnWidth(1),
+              },
+              children: [
+                chargeRow('Trip / Service Charges', serviceCharges(b)),
+                chargeRow('Toll', b.toll),
+                chargeRow('Parking', b.parking),
+                chargeRow('GRAND TOTAL', b.total, emphasize: true),
+              ],
             ),
             pw.Spacer(),
             pw.Center(
@@ -549,6 +596,7 @@ class _BillPageState extends State<BillPage> {
 Trip Bill
 
 Guest: ${b.guest}
+Guest Phone: ${b.phone}
 Vehicle: ${b.vehicleType}
 Vehicle Number: ${b.vehicle}
 Starting Date: ${date(b.startDate)}
@@ -557,6 +605,9 @@ Total Days: ${b.days}
 Starting KM: ${b.startKm.toStringAsFixed(0)}
 Closing KM: ${b.closeKm.toStringAsFixed(0)}
 Total KM: ${b.totalKm.toStringAsFixed(0)}
+Trip / Service Charges: Rs ${serviceCharges(b).toStringAsFixed(2)}
+Toll: Rs ${b.toll.toStringAsFixed(2)}
+Parking: Rs ${b.parking.toStringAsFixed(2)}
 Total Amount: Rs ${b.total.toStringAsFixed(2)}
 
 Thank you for choosing SVT Tours & Transport!''';
@@ -576,6 +627,65 @@ Thank you for choosing SVT Tours & Transport!''';
         const SnackBar(content: Text('Booking saved successfully')),
       );
     }
+  }
+
+  Future<void> pickContact() async {
+    final permitted = await FlutterContacts.requestPermission(readonly: true);
+    if (!permitted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content:
+                Text('Contacts permission denied. Enter the phone manually.')));
+      }
+      return;
+    }
+
+    final contacts = (await FlutterContacts.getContacts(withProperties: true))
+        .where((contact) => contact.phones.isNotEmpty)
+        .toList();
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Contact>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView.builder(
+          itemCount: contacts.length,
+          itemBuilder: (context, index) {
+            final contact = contacts[index];
+            return ListTile(
+              title: Text(contact.displayName),
+              subtitle:
+                  Text(contact.phones.map((phone) => phone.number).join(', ')),
+              onTap: () => Navigator.pop(context, contact),
+            );
+          },
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+
+    final selectedNumber = selected.phones.length == 1
+        ? selected.phones.first.number
+        : await showDialog<String>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Choose a number for ${selected.displayName}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: selected.phones
+                    .map((contactPhone) => ListTile(
+                          title: Text(contactPhone.number),
+                          onTap: () =>
+                              Navigator.pop(context, contactPhone.number),
+                        ))
+                    .toList(),
+              ),
+            ),
+          );
+    if (!mounted || selectedNumber == null) return;
+    setState(() {
+      guest.text = selected.displayName;
+      phone.text = selectedNumber;
+    });
   }
 
   void clear() {
@@ -666,11 +776,23 @@ Thank you for choosing SVT Tours & Transport!''';
           padding: const EdgeInsets.all(16),
           children: [
             field('Guest Name', guest, required: true),
-            field('Guest Phone', phone,
-                required: true, type: TextInputType.phone),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: field('Guest Phone', phone,
+                      required: true, type: TextInputType.phone),
+                ),
+                IconButton(
+                  tooltip: 'Choose contact',
+                  onPressed: pickContact,
+                  icon: const Icon(Icons.contacts_outlined),
+                ),
+              ],
+            ),
             field('Vehicle Number', vehicle, required: true),
             DropdownButtonFormField<String>(
-              value: billing,
+              initialValue: billing,
               decoration: const InputDecoration(labelText: 'Billing Type'),
               items: const [
                 DropdownMenuItem(value: 'KM Based', child: Text('KM Based')),
@@ -680,7 +802,7 @@ Thank you for choosing SVT Tours & Transport!''';
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: vehicleType,
+              initialValue: vehicleType,
               decoration: const InputDecoration(labelText: 'Vehicle Category'),
               items: const [
                 DropdownMenuItem(value: 'Sedan', child: Text('Sedan')),
@@ -711,8 +833,7 @@ Thank you for choosing SVT Tours & Transport!''';
             const SizedBox(height: 10),
             field('Driver Name (Optional)', driver),
             field('Details of Trip (Optional)', details),
-            field('Toll Amount (Optional)', toll,
-                type: TextInputType.number),
+            field('Toll Amount (Optional)', toll, type: TextInputType.number),
             field('Parking Amount (Optional)', parking,
                 type: TextInputType.number),
             Card(
@@ -723,6 +844,12 @@ Thank you for choosing SVT Tours & Transport!''';
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
               ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => launchUrl(Uri.parse(googleReviewUrl),
+                  mode: LaunchMode.externalApplication),
+              icon: const Icon(Icons.rate_review_outlined),
+              label: const Text('Google Review'),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
@@ -789,8 +916,8 @@ class _HistoryPageState extends State<HistoryPage> {
   List<Booking> get filtered => widget.bookings.where((b) {
         if (from != null && b.startDate.isBefore(from!)) return false;
         if (to != null &&
-            b.startDate.isAfter(
-                DateTime(to!.year, to!.month, to!.day, 23, 59, 59))) {
+            b.startDate
+                .isAfter(DateTime(to!.year, to!.month, to!.day, 23, 59, 59))) {
           return false;
         }
         return true;
@@ -928,10 +1055,9 @@ class _PreBookingPageState extends State<PreBookingPage> {
   }
 
   Future<void> sendRequirement(PreBooking b) async {
-    final number = (widget.officeWhatsApp.isNotEmpty
-            ? widget.officeWhatsApp
-            : b.phone)
-        .replaceAll(RegExp(r'[^0-9]'), '');
+    final number =
+        (widget.officeWhatsApp.isNotEmpty ? widget.officeWhatsApp : b.phone)
+            .replaceAll(RegExp(r'[^0-9]'), '');
 
     final text = '''SVT PRE-BOOKING REQUIREMENT
 Guest: ${b.guest}
@@ -960,8 +1086,7 @@ Details: ${b.details}''';
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Pre-Booking',
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text('Pre-Booking', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
           Form(
             key: form,
@@ -984,8 +1109,8 @@ Details: ${b.details}''';
                 const SizedBox(height: 10),
                 TextFormField(
                   controller: vehicle,
-                  decoration: const InputDecoration(
-                      labelText: 'Vehicle / Requirement'),
+                  decoration:
+                      const InputDecoration(labelText: 'Vehicle / Requirement'),
                 ),
                 const SizedBox(height: 10),
                 ListTile(

@@ -686,11 +686,10 @@ class _BillPageState extends State<BillPage> {
                 1: const pw.FlexColumnWidth(1),
               },
               children: [
-                if (b.billingType != 'Full Day') ...[
+                if (b.billingType != 'Full Day')
                   chargeRow('Trip / Service Charges', serviceCharges(b)),
-                  chargeRow('Toll', b.toll),
-                  chargeRow('Parking', b.parking),
-                ],
+                chargeRow('Toll', b.toll),
+                chargeRow('Parking', b.parking),
                 chargeRow(b.billingType == 'Full Day'
                   ? 'Total Amount'
                   : 'GRAND TOTAL', b.total, emphasize: true),
@@ -739,7 +738,9 @@ ${b.billingType == 'Full Day' ? 'Starting Time: ${DateFormat('hh:mm a').format(b
 Starting KM: ${b.startKm.toStringAsFixed(0)}
 Closing KM: ${b.closeKm.toStringAsFixed(0)}
 Total KM: ${b.totalKm.toStringAsFixed(0)}
-${b.billingType == 'Full Day' ? 'Extra Hours: ${extraHoursFor(b).toStringAsFixed(2)} Hours\n' : 'Trip / Service Charges: Rs ${serviceCharges(b).toStringAsFixed(2)}\n'}${b.billingType == 'Full Day' ? '' : 'Toll: Rs ${b.toll.toStringAsFixed(2)}\nParking: Rs ${b.parking.toStringAsFixed(2)}\n'}Total Amount: Rs ${b.total.toStringAsFixed(2)}
+${b.billingType == 'Full Day' ? 'Extra Hours: ${extraHoursFor(b).toStringAsFixed(2)} Hours\n' : 'Trip / Service Charges: Rs ${serviceCharges(b).toStringAsFixed(2)}\n'}Toll: Rs ${b.toll.toStringAsFixed(2)}
+Parking: Rs ${b.parking.toStringAsFixed(2)}
+Total Amount: Rs ${b.total.toStringAsFixed(2)}
 
 Thank you for choosing SVT Tours & Transport!
 

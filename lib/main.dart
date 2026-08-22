@@ -660,6 +660,10 @@ class _BillPageState extends State<BillPage> {
                 detailRow('Starting Date', date(b.startDate)),
                 detailRow('Closing Date', date(b.closeDate)),
                 if (b.billingType == 'Full Day') ...[
+                  detailRow('Starting Time',
+                    DateFormat('hh:mm a').format(b.startTime)),
+                  detailRow('Closing Time',
+                    DateFormat('hh:mm a').format(b.closeTime)),
                   detailRow('Extra Hours',
                       '${extraHoursFor(b).toStringAsFixed(2)} Hours'),
                 ],
@@ -731,7 +735,7 @@ Vehicle: ${b.vehicleType}
 Vehicle Number: ${b.vehicle}
 Starting Date: ${date(b.startDate)}
 Closing Date: ${date(b.closeDate)}
-Total Days: ${b.days}
+${b.billingType == 'Full Day' ? 'Starting Time: ${DateFormat('hh:mm a').format(b.startTime)}\nClosing Time: ${DateFormat('hh:mm a').format(b.closeTime)}\n' : ''}Total Days: ${b.days}
 Starting KM: ${b.startKm.toStringAsFixed(0)}
 Closing KM: ${b.closeKm.toStringAsFixed(0)}
 Total KM: ${b.totalKm.toStringAsFixed(0)}

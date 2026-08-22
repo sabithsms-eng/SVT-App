@@ -17,6 +17,20 @@ import 'package:url_launcher/url_launcher.dart';
 const googleReviewUrl = 'https://maps.app.goo.gl/wKGTJt8RZ7QqJqSu6';
 final notifications = FlutterLocalNotificationsPlugin();
 
+Future<Map<Object?, Object?>?> pickNativeContact(BuildContext context) async {
+  final permitted = await FlutterContacts.requestPermission(readonly: true);
+  if (!permitted) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Contacts permission denied. Enter the phone manually.')));
+    }
+    return null;
+  }
+  return const MethodChannel('svt/contact_picker')
+      .invokeMethod<Map<Object?, Object?>>('pickContact');
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz_data.initializeTimeZones();
@@ -35,8 +49,9 @@ Future<void> main() async {
 
 class Booking {
   String id, guest, phone, vehicle, driver, details, billingType, vehicleType;
-  DateTime startDate, closeDate;
+  DateTime startDate, closeDate, startTime, closeTime;
   double startKm, closeKm, totalKmValue, toll, parking, total;
+  double extraHourCharge;
 
   Booking({
     required this.id,
@@ -47,6 +62,8 @@ class Booking {
     required this.details,
     required this.startDate,
     required this.closeDate,
+    required this.startTime,
+    required this.closeTime,
     required this.startKm,
     required this.closeKm,
     required this.totalKmValue,
@@ -55,6 +72,7 @@ class Booking {
     required this.billingType,
     required this.vehicleType,
     required this.total,
+    required this.extraHourCharge,
   });
 
   double get totalKm => totalKmValue;
@@ -69,6 +87,8 @@ class Booking {
         'details': details,
         'startDate': startDate.toIso8601String(),
         'closeDate': closeDate.toIso8601String(),
+        'startTime': startTime.toIso8601String(),
+        'closeTime': closeTime.toIso8601String(),
         'startKm': startKm,
         'closeKm': closeKm,
         'totalKm': totalKmValue,
@@ -88,6 +108,10 @@ class Booking {
         details: j['details'] ?? '',
         startDate: DateTime.parse(j['startDate']),
         closeDate: DateTime.parse(j['closeDate']),
+        startTime: DateTime.tryParse(j['startTime'] ?? '') ??
+          DateTime.parse(j['startDate']).copyWith(hour: 9, minute: 0),
+        closeTime: DateTime.tryParse(j['closeTime'] ?? '') ??
+          DateTime.parse(j['closeDate']).copyWith(hour: 17, minute: 0),
         startKm: (j['startKm'] ?? 0).toDouble(),
         closeKm: (j['closeKm'] ?? 0).toDouble(),
         totalKmValue:
@@ -98,6 +122,7 @@ class Booking {
         billingType: j['billingType'] ?? 'KM Based',
         vehicleType: j['vehicleType'] ?? 'Sedan',
         total: (j['total'] ?? 0).toDouble(),
+        extraHourCharge: (j['extraHourCharge'] ?? 0).toDouble(),
       );
 }
 
@@ -195,7 +220,9 @@ class _HomePageState extends State<HomePage> {
   double suvRate = 4500;
   double includedKm = 100;
   double extraKmRate = 20;
+  double extraHourRate = 500;
   String officeWhatsApp = '';
+  Booking? editingBooking;
 
   @override
   void initState() {
@@ -219,6 +246,7 @@ class _HomePageState extends State<HomePage> {
       suvRate = p.getDouble('suvRate') ?? 4500;
       includedKm = p.getDouble('includedKm') ?? 100;
       extraKmRate = p.getDouble('extraKmRate') ?? 20;
+      extraHourRate = p.getDouble('extraHourRate') ?? 500;
       officeWhatsApp = p.getString('officeWhatsApp') ?? '';
     });
   }
@@ -238,6 +266,7 @@ class _HomePageState extends State<HomePage> {
       TextEditingController(text: '$suvRate'),
       TextEditingController(text: '$includedKm'),
       TextEditingController(text: '$extraKmRate'),
+      TextEditingController(text: '$extraHourRate'),
       TextEditingController(text: officeWhatsApp),
     ];
 
@@ -253,7 +282,8 @@ class _HomePageState extends State<HomePage> {
               setting('SUV Full Day Rate', c[2]),
               setting('Included KM / Day', c[3]),
               setting('Extra KM Rate', c[4]),
-              setting('Office WhatsApp Number', c[5],
+                setting('Extra Hour Charge', c[5]),
+                setting('Office WhatsApp Number', c[6],
                   type: TextInputType.phone),
               const SizedBox(height: 8),
               const Text(
@@ -276,13 +306,15 @@ class _HomePageState extends State<HomePage> {
                 suvRate = double.tryParse(c[2].text) ?? suvRate;
                 includedKm = double.tryParse(c[3].text) ?? includedKm;
                 extraKmRate = double.tryParse(c[4].text) ?? extraKmRate;
-                officeWhatsApp = c[5].text.trim();
+                extraHourRate = double.tryParse(c[5].text) ?? extraHourRate;
+                officeWhatsApp = c[6].text.trim();
               });
               await p.setDouble('kmRate', kmRate);
               await p.setDouble('sedanRate', sedanRate);
               await p.setDouble('suvRate', suvRate);
               await p.setDouble('includedKm', includedKm);
               await p.setDouble('extraKmRate', extraKmRate);
+              await p.setDouble('extraHourRate', extraHourRate);
               await p.setString('officeWhatsApp', officeWhatsApp);
               if (mounted) Navigator.pop(context);
             },
@@ -324,18 +356,38 @@ class _HomePageState extends State<HomePage> {
           index: tab,
           children: [
             BillPage(
+              key: ValueKey(editingBooking?.id),
               kmRate: kmRate,
               sedanRate: sedanRate,
               suvRate: suvRate,
               includedKm: includedKm,
               extraKmRate: extraKmRate,
+              extraHourRate: extraHourRate,
+              editingBooking: editingBooking,
               onSaved: (b) async {
-                bookings.insert(0, b);
+                final index = bookings.indexWhere((x) => x.id == b.id);
+                if (index >= 0) {
+                  bookings[index] = b;
+                  editingBooking = null;
+                } else {
+                  bookings.insert(0, b);
+                }
                 await saveData();
                 setState(() {});
               },
             ),
-            HistoryPage(bookings: bookings),
+            HistoryPage(
+              bookings: bookings,
+              onEdit: (b) => setState(() {
+                editingBooking = b;
+                tab = 0;
+              }),
+              onDelete: (b) async {
+                bookings.removeWhere((x) => x.id == b.id);
+                await saveData();
+                setState(() {});
+              },
+            ),
             PreBookingPage(
               preBookings: preBookings,
               officeWhatsApp: officeWhatsApp,
@@ -369,7 +421,8 @@ class _HomePageState extends State<HomePage> {
 }
 
 class BillPage extends StatefulWidget {
-  final double kmRate, sedanRate, suvRate, includedKm, extraKmRate;
+  final double kmRate, sedanRate, suvRate, includedKm, extraKmRate, extraHourRate;
+  final Booking? editingBooking;
   final Future<void> Function(Booking) onSaved;
 
   const BillPage({
@@ -379,6 +432,8 @@ class BillPage extends StatefulWidget {
     required this.suvRate,
     required this.includedKm,
     required this.extraKmRate,
+    required this.extraHourRate,
+    this.editingBooking,
     required this.onSaved,
   });
 
@@ -398,31 +453,74 @@ class _BillPageState extends State<BillPage> {
   final totalKmController = TextEditingController();
   final toll = TextEditingController(text: '0');
   final parking = TextEditingController(text: '0');
+  final extraHourCharge = TextEditingController();
+  final totalAmount = TextEditingController();
 
   DateTime startDate = DateTime.now();
   DateTime closeDate = DateTime.now();
+  TimeOfDay startTime = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay closeTime = const TimeOfDay(hour: 17, minute: 0);
   String billing = 'KM Based';
   String vehicleType = 'Sedan';
   bool updatingKm = false;
 
+  @override
+  void initState() {
+    super.initState();
+    extraHourCharge.text = '${widget.extraHourRate}';
+    final b = widget.editingBooking;
+    if (b == null) return;
+    guest.text = b.guest;
+    phone.text = b.phone;
+    vehicle.text = b.vehicle;
+    driver.text = b.driver;
+    details.text = b.details;
+    startKm.text = '${b.startKm}';
+    closeKm.text = '${b.closeKm}';
+    totalKmController.text = '${b.totalKm}';
+    toll.text = '${b.toll}';
+    parking.text = '${b.parking}';
+    extraHourCharge.text = '${b.extraHourCharge}';
+    totalAmount.text = '${b.total}';
+    startDate = b.startDate;
+    closeDate = b.closeDate;
+    startTime = TimeOfDay.fromDateTime(b.startTime);
+    closeTime = TimeOfDay.fromDateTime(b.closeTime);
+    billing = b.billingType;
+    vehicleType = b.vehicleType;
+  }
+
   double n(TextEditingController c) => double.tryParse(c.text) ?? 0;
   double get totalKm => n(totalKmController);
   int get days => closeDate.difference(startDate).inDays + 1;
-
-  double get total {
+  DateTime get tripStart => DateTime(startDate.year, startDate.month,
+      startDate.day, startTime.hour, startTime.minute);
+  DateTime get tripClose => DateTime(closeDate.year, closeDate.month,
+      closeDate.day, closeTime.hour, closeTime.minute);
+  double get extraHours => ((tripClose.difference(tripStart).inMinutes - 480)
+          .clamp(0, double.infinity)) /
+      60;
+  double get calculatedTotal {
     if (billing == 'KM Based') {
       return totalKm * widget.kmRate + n(toll) + n(parking);
     }
     final base = vehicleType == 'SUV' ? widget.suvRate : widget.sedanRate;
-    final extra =
+    final extraKm =
         (totalKm - widget.includedKm * days).clamp(0, double.infinity);
-    return base * days + extra * widget.extraKmRate + n(toll) + n(parking);
+    return base * days +
+        extraKm * widget.extraKmRate +
+        extraHours * n(extraHourCharge) +
+        n(toll) +
+        n(parking);
   }
+
+  double get total => double.tryParse(totalAmount.text) ?? calculatedTotal;
 
   double serviceCharges(Booking b) =>
       (b.total - b.toll - b.parking).clamp(0, double.infinity).toDouble();
 
   String date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
+  String timeLabel(TimeOfDay t) => t.format(context);
 
   Future<void> chooseDate(bool start) async {
     final d = await showDatePicker(
@@ -442,8 +540,24 @@ class _BillPageState extends State<BillPage> {
     });
   }
 
+  Future<void> chooseTime(bool start) async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: start ? startTime : closeTime,
+    );
+    if (selected == null) return;
+    setState(() {
+      if (start) {
+        startTime = selected;
+      } else {
+        closeTime = selected;
+      }
+    });
+  }
+
   Booking makeBooking() => Booking(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: widget.editingBooking?.id ??
+        DateTime.now().microsecondsSinceEpoch.toString(),
         guest: guest.text.trim(),
         phone: phone.text.trim(),
         vehicle: vehicle.text.trim(),
@@ -451,6 +565,8 @@ class _BillPageState extends State<BillPage> {
         details: details.text.trim(),
         startDate: startDate,
         closeDate: closeDate,
+        startTime: tripStart,
+        closeTime: tripClose,
         startKm: n(startKm),
         closeKm: n(closeKm),
         totalKmValue: totalKm,
@@ -459,6 +575,7 @@ class _BillPageState extends State<BillPage> {
         billingType: billing,
         vehicleType: vehicleType,
         total: total,
+        extraHourCharge: n(extraHourCharge),
       );
 
   Future<Uint8List> pdfBytes(Booking b) async {
@@ -537,6 +654,10 @@ class _BillPageState extends State<BillPage> {
                 detailRow('Vehicle Type', b.vehicleType),
                 detailRow('Starting Date', date(b.startDate)),
                 detailRow('Closing Date', date(b.closeDate)),
+                if (b.billingType == 'Full Day') ...[
+                  detailRow('Starting Time', DateFormat('hh:mm a').format(b.startTime)),
+                  detailRow('Closing Time', DateFormat('hh:mm a').format(b.closeTime)),
+                ],
                 detailRow('Total Days', '${b.days}'),
                 detailRow('Starting KM', b.startKm.toStringAsFixed(0)),
                 detailRow('Closing KM', b.closeKm.toStringAsFixed(0)),
@@ -632,18 +753,7 @@ Google Review: $googleReviewUrl''';
   }
 
   Future<void> pickContact() async {
-    final permitted = await FlutterContacts.requestPermission(readonly: true);
-    if (!permitted) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content:
-                Text('Contacts permission denied. Enter the phone manually.')));
-      }
-      return;
-    }
-
-    final selected = await const MethodChannel('svt/contact_picker')
-        .invokeMethod<Map<Object?, Object?>>('pickContact');
+    final selected = await pickNativeContact(context);
     if (!mounted || selected == null) return;
     setState(() {
       guest.text = selected['name'] as String? ?? '';
@@ -669,9 +779,13 @@ Google Review: $googleReviewUrl''';
     setState(() {
       startDate = DateTime.now();
       closeDate = DateTime.now();
+      startTime = const TimeOfDay(hour: 9, minute: 0);
+      closeTime = const TimeOfDay(hour: 17, minute: 0);
       billing = 'KM Based';
       vehicleType = 'Sedan';
       totalKmController.clear();
+      extraHourCharge.clear();
+      totalAmount.clear();
     });
   }
 
@@ -793,12 +907,31 @@ Google Review: $googleReviewUrl''';
               onTap: () => chooseDate(false),
             ),
             Text('Total Days: $days'),
+            if (billing == 'Full Day') ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Starting Time: ${timeLabel(startTime)}'),
+                trailing: const Icon(Icons.schedule),
+                onTap: () => chooseTime(true),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('Closing Time: ${timeLabel(closeTime)}'),
+                trailing: const Icon(Icons.schedule),
+                onTap: () => chooseTime(false),
+              ),
+              field('Extra Hour Charge', extraHourCharge,
+                  type: TextInputType.number),
+            ],
             const SizedBox(height: 10),
             field('Driver Name (Optional)', driver),
             field('Details of Trip (Optional)', details),
             field('Toll Amount (Optional)', toll, type: TextInputType.number),
             field('Parking Amount (Optional)', parking,
                 type: TextInputType.number),
+            Text('Calculated Amount: Rs ${calculatedTotal.toStringAsFixed(2)}'),
+            field('Final Total Amount (editable)', totalAmount,
+              type: TextInputType.number),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -857,7 +990,9 @@ Google Review: $googleReviewUrl''';
       closeKm,
       totalKmController,
       toll,
-      parking
+      parking,
+      extraHourCharge,
+      totalAmount,
     ]) {
       c.dispose();
     }
@@ -867,7 +1002,14 @@ Google Review: $googleReviewUrl''';
 
 class HistoryPage extends StatefulWidget {
   final List<Booking> bookings;
-  const HistoryPage({super.key, required this.bookings});
+  final void Function(Booking) onEdit;
+  final Future<void> Function(Booking) onDelete;
+  const HistoryPage({
+    super.key,
+    required this.bookings,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -896,6 +1038,25 @@ class _HistoryPageState extends State<HistoryPage> {
     if (d != null) {
       setState(() => isFrom ? from = d : to = d);
     }
+  }
+
+  Future<void> confirmDelete(Booking booking) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete booking?'),
+        content: Text('Delete the booking for ${booking.guest}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed == true) await widget.onDelete(booking);
   }
 
   @override
@@ -947,7 +1108,24 @@ class _HistoryPageState extends State<HistoryPage> {
                           title: Text(b.guest),
                           subtitle: Text(
                               '${DateFormat('dd/MM/yyyy').format(b.startDate)} • ${b.vehicle} • ${b.totalKm.toStringAsFixed(0)} KM'),
-                          trailing: Text('Rs ${b.total.toStringAsFixed(0)}'),
+                          trailing: Wrap(
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit',
+                                onPressed: () => widget.onEdit(b),
+                                icon: const Icon(Icons.edit_outlined),
+                              ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                onPressed: () => confirmDelete(b),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 14),
+                                child: Text('Rs ${b.total.toStringAsFixed(0)}'),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -982,6 +1160,15 @@ class _PreBookingPageState extends State<PreBookingPage> {
   final vehicle = TextEditingController();
   final details = TextEditingController();
   DateTime requiredDate = DateTime.now().add(const Duration(days: 1));
+
+  Future<void> pickContact() async {
+    final selected = await pickNativeContact(context);
+    if (!mounted || selected == null) return;
+    setState(() {
+      guest.text = selected['name'] as String? ?? '';
+      phone.text = selected['phone'] as String? ?? '';
+    });
+  }
 
   Future<void> pickDate() async {
     final d = await showDatePicker(
@@ -1062,12 +1249,26 @@ Details: ${b.details}''';
                   decoration: const InputDecoration(labelText: 'Guest Name'),
                 ),
                 const SizedBox(height: 10),
-                TextFormField(
-                  controller: phone,
-                  keyboardType: TextInputType.phone,
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'Required' : null,
-                  decoration: const InputDecoration(labelText: 'Guest Phone'),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: phone,
+                        keyboardType: TextInputType.phone,
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Required'
+                            : null,
+                        decoration:
+                            const InputDecoration(labelText: 'Guest Phone'),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Choose contact',
+                      onPressed: pickContact,
+                      icon: const Icon(Icons.contacts_outlined),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 TextFormField(

@@ -97,6 +97,7 @@ class Booking {
         'billingType': billingType,
         'vehicleType': vehicleType,
         'total': total,
+        'extraHourCharge': extraHourCharge,
       };
 
   factory Booking.fromJson(Map<String, dynamic> j) => Booking(
@@ -122,7 +123,7 @@ class Booking {
         billingType: j['billingType'] ?? 'KM Based',
         vehicleType: j['vehicleType'] ?? 'Sedan',
         total: (j['total'] ?? 0).toDouble(),
-        extraHourCharge: (j['extraHourCharge'] ?? 0).toDouble(),
+        extraHourCharge: (j['extraHourCharge'] ?? 250).toDouble(),
       );
 }
 
@@ -220,7 +221,7 @@ class _HomePageState extends State<HomePage> {
   double suvRate = 4500;
   double includedKm = 100;
   double extraKmRate = 20;
-  double extraHourRate = 500;
+  double extraHourRate = 250;
   String officeWhatsApp = '';
   Booking? editingBooking;
 
@@ -246,7 +247,7 @@ class _HomePageState extends State<HomePage> {
       suvRate = p.getDouble('suvRate') ?? 4500;
       includedKm = p.getDouble('includedKm') ?? 100;
       extraKmRate = p.getDouble('extraKmRate') ?? 20;
-      extraHourRate = p.getDouble('extraHourRate') ?? 500;
+      extraHourRate = p.getDouble('extraHourRate') ?? 250;
       officeWhatsApp = p.getString('officeWhatsApp') ?? '';
     });
   }
@@ -521,6 +522,10 @@ class _BillPageState extends State<BillPage> {
 
   String date(DateTime d) => DateFormat('dd/MM/yyyy').format(d);
   String timeLabel(TimeOfDay t) => t.format(context);
+  double extraHoursFor(Booking b) =>
+      ((b.closeTime.difference(b.startTime).inMinutes - 480)
+              .clamp(0, double.infinity)) /
+          60;
 
   Future<void> chooseDate(bool start) async {
     final d = await showDatePicker(
@@ -655,8 +660,8 @@ class _BillPageState extends State<BillPage> {
                 detailRow('Starting Date', date(b.startDate)),
                 detailRow('Closing Date', date(b.closeDate)),
                 if (b.billingType == 'Full Day') ...[
-                  detailRow('Starting Time', DateFormat('hh:mm a').format(b.startTime)),
-                  detailRow('Closing Time', DateFormat('hh:mm a').format(b.closeTime)),
+                  detailRow('Extra Hours',
+                      '${extraHoursFor(b).toStringAsFixed(2)} Hours'),
                 ],
                 detailRow('Total Days', '${b.days}'),
                 detailRow('Starting KM', b.startKm.toStringAsFixed(0)),
@@ -677,10 +682,14 @@ class _BillPageState extends State<BillPage> {
                 1: const pw.FlexColumnWidth(1),
               },
               children: [
-                chargeRow('Trip / Service Charges', serviceCharges(b)),
-                chargeRow('Toll', b.toll),
-                chargeRow('Parking', b.parking),
-                chargeRow('GRAND TOTAL', b.total, emphasize: true),
+                if (b.billingType != 'Full Day') ...[
+                  chargeRow('Trip / Service Charges', serviceCharges(b)),
+                  chargeRow('Toll', b.toll),
+                  chargeRow('Parking', b.parking),
+                ],
+                chargeRow(b.billingType == 'Full Day'
+                  ? 'Total Amount'
+                  : 'GRAND TOTAL', b.total, emphasize: true),
               ],
             ),
             pw.Spacer(),
@@ -726,10 +735,7 @@ Total Days: ${b.days}
 Starting KM: ${b.startKm.toStringAsFixed(0)}
 Closing KM: ${b.closeKm.toStringAsFixed(0)}
 Total KM: ${b.totalKm.toStringAsFixed(0)}
-Trip / Service Charges: Rs ${serviceCharges(b).toStringAsFixed(2)}
-Toll: Rs ${b.toll.toStringAsFixed(2)}
-Parking: Rs ${b.parking.toStringAsFixed(2)}
-Total Amount: Rs ${b.total.toStringAsFixed(2)}
+${b.billingType == 'Full Day' ? 'Extra Hours: ${extraHoursFor(b).toStringAsFixed(2)} Hours\n' : 'Trip / Service Charges: Rs ${serviceCharges(b).toStringAsFixed(2)}\n'}${b.billingType == 'Full Day' ? '' : 'Toll: Rs ${b.toll.toStringAsFixed(2)}\nParking: Rs ${b.parking.toStringAsFixed(2)}\n'}Total Amount: Rs ${b.total.toStringAsFixed(2)}
 
 Thank you for choosing SVT Tours & Transport!
 
